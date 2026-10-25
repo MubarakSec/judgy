@@ -8,6 +8,31 @@ class QuickAddNotifications {
   static final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
 
+  static Future<void> showBudgetAlert({
+    required int percentage,
+    required bool overBudget,
+  }) async {
+    if (!Platform.isAndroid) return;
+
+    await _plugin.show(
+      id: 2,
+      title: 'Judgy budget',
+      body: overBudget
+          ? 'You are $percentage% of your monthly budget.'
+          : 'You have used $percentage% of your monthly budget.',
+      notificationDetails: const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'judgy_quick_add',
+          'Judgy quick add',
+          channelDescription:
+              'Quickly add an expense from the notification shade.',
+          importance: Importance.high,
+          priority: Priority.high,
+        ),
+      ),
+    );
+  }
+
   static Future<String?> initialize() async {
     if (!Platform.isAndroid) return null;
 

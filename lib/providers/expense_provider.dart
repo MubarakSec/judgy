@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/expense.dart';
+import '../services/quick_add_notifications.dart';
 
 class ExpenseRemoval {
   const ExpenseRemoval({required this.expense, required this.index});
@@ -43,6 +44,8 @@ class ExpenseProvider with ChangeNotifier {
   String? _warningMessage;
   String? _errorMessage;
   bool _loadFailed = false;
+  int _lastBudgetAlertLevel = 0;
+  int _budgetAlertPeriod = 0;
 
   UnmodifiableListView<Expense> get expenses => UnmodifiableListView(_expenses);
   DateTime get now => _clock();
@@ -56,6 +59,7 @@ class ExpenseProvider with ChangeNotifier {
   String? get warningMessage => _warningMessage;
   String? get errorMessage => _errorMessage;
   bool get loadFailed => _loadFailed;
+  int get lastBudgetAlertLevel => _lastBudgetAlertLevel;
   Future<void> get initialized => _initialized;
 
   List<Expense> get filteredExpenses {
@@ -111,7 +115,7 @@ class ExpenseProvider with ChangeNotifier {
     );
   }
 
-  Future<bool> updateSettings(double rate, double budget) {
+  Future<bool> updateSettings(double rate, double budget) async {
     if (!rate.isFinite || rate <= 0 || rate > _maxExchangeRate || !budget.isFinite || budget < 0) {
       _setError('Enter a valid exchange rate and a budget of zero or more.');
       return Future.value(false);
@@ -125,7 +129,7 @@ class ExpenseProvider with ChangeNotifier {
 
     final previousRate = _exchangeRate;
     final previousBudget = _monthlyBudgetCents;
-    return _commit(
+    final saved = await _commit(
       apply: () {
         _exchangeRate = rate;
         _monthlyBudgetCents = budgetCents;
@@ -137,10 +141,12 @@ class ExpenseProvider with ChangeNotifier {
       failureMessage:
           'Settings could not be saved. Your previous values remain.',
     );
+    if (saved) await _maybeBudgetAlert();
+    return saved;
   }
 
-  Future<bool> addExpense(Expense expense) {
-    return _commit(
+  Future<bool> addExpense(Expense expense) async {
+    final saved = await _commit(
       apply: () {
         _expenses.add(expense);
         _expenses.sort((a, b) => b.date.compareTo(a.date));
@@ -148,16 +154,18 @@ class ExpenseProvider with ChangeNotifier {
       rollback: () => _expenses.removeWhere((item) => item.id == expense.id),
       failureMessage: 'Expense could not be saved. Please try again.',
     );
+    if (saved) await _maybeBudgetAlert();
+    return saved;
   }
 
-  Future<bool> updateExpense(Expense updated) {
+  Future<bool> updateExpense(Expense updated) async {
     final previous = _expenses
         .where((expense) => expense.id == updated.id)
         .cast<Expense?>()
         .firstOrNull;
     if (previous == null) return Future.value(false);
 
-    return _commit(
+    final saved = await _commit(
       apply: () {
         _expenses.removeWhere((expense) => expense.id == updated.id);
         _expenses.add(updated);
@@ -170,6 +178,8 @@ class ExpenseProvider with ChangeNotifier {
       },
       failureMessage: 'Expense could not be updated. Please try again.',
     );
+    if (saved) await _maybeBudgetAlert();
+    return saved;
   }
 
   Future<ExpenseRemoval?> removeExpense(String id) {
@@ -242,6 +252,8 @@ class ExpenseProvider with ChangeNotifier {
       'isUSD': _isUSD,
       'exchangeRate': _exchangeRate,
       'monthlyBudgetCents': _monthlyBudgetCents,
+      'lastBudgetAlertLevel': _lastBudgetAlertLevel,
+      'budgetAlertPeriod': _budgetAlertPeriod,
       'expenses': _expenses.map((expense) => expense.toMap()).toList(),
     });
   }
@@ -262,6 +274,15 @@ class ExpenseProvider with ChangeNotifier {
       final monthlyBudgetCents =
           _validNonNegativeInteger(state['monthlyBudgetCents']) ??
           _monthlyBudgetCents;
+      final currentPeriod = _clock().year * 100 + _clock().month;
+      _lastBudgetAlertLevel =
+          _validNonNegativeInteger(state['lastBudgetAlertLevel'])?.toInt() ?? 0;
+      _budgetAlertPeriod =
+          _validNonNegativeInteger(state['budgetAlertPeriod'])?.toInt() ?? currentPeriod;
+      if (_budgetAlertPeriod != currentPeriod) {
+        _lastBudgetAlertLevel = 0;
+        _budgetAlertPeriod = currentPeriod;
+      }
       final importedExpenses = _parseExpenseRows(state['expenses']).toList();
 
       _isUSD = isUSD;
@@ -286,6 +307,35 @@ class ExpenseProvider with ChangeNotifier {
       notifyListeners();
       return false;
     });
+  }
+
+  Future<void> _maybeBudgetAlert() async {
+    if (_monthlyBudgetCents <= 0) return;
+    final currentPeriod = _clock().year * 100 + _clock().month;
+    if (_budgetAlertPeriod != currentPeriod) {
+      _lastBudgetAlertLevel = 0;
+      _budgetAlertPeriod = currentPeriod;
+    }
+    final percentage = monthlySpentCents / _monthlyBudgetCents * 100;
+    int level = 0;
+    if (percentage >= 120) {
+      level = 120;
+    } else if (percentage >= 100) {
+      level = 100;
+    } else if (percentage >= 80) {
+      level = 80;
+    }
+    if (level == 0 || level <= _lastBudgetAlertLevel) return;
+    _lastBudgetAlertLevel = level;
+    await QuickAddNotifications.showBudgetAlert(
+      percentage: level,
+      overBudget: percentage >= 100,
+    );
+    try {
+      await _saveState();
+    } catch (_) {
+      // Alert state is best-effort; spending data remains saved.
+    }
   }
 
   Future<bool> _commit({
@@ -373,6 +423,15 @@ class ExpenseProvider with ChangeNotifier {
     _monthlyBudgetCents =
         _validNonNegativeInteger(state['monthlyBudgetCents']) ??
         _defaultBudgetCents;
+    final currentPeriod = _clock().year * 100 + _clock().month;
+    _lastBudgetAlertLevel =
+        _validNonNegativeInteger(state['lastBudgetAlertLevel'])?.toInt() ?? 0;
+    _budgetAlertPeriod =
+        _validNonNegativeInteger(state['budgetAlertPeriod'])?.toInt() ?? currentPeriod;
+    if (_budgetAlertPeriod != currentPeriod) {
+      _lastBudgetAlertLevel = 0;
+      _budgetAlertPeriod = currentPeriod;
+    }
     _expenses
       ..clear()
       ..addAll(_parseExpenseRows(state['expenses']));
@@ -440,6 +499,8 @@ class ExpenseProvider with ChangeNotifier {
       'isUSD': _isUSD,
       'exchangeRate': _exchangeRate,
       'monthlyBudgetCents': _monthlyBudgetCents,
+      'lastBudgetAlertLevel': _lastBudgetAlertLevel,
+      'budgetAlertPeriod': _budgetAlertPeriod,
       'expenses': _expenses.map((expense) => expense.toMap()).toList(),
     };
     final saved = await preferences.setString(_stateKey, jsonEncode(state));
