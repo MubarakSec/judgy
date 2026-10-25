@@ -131,4 +131,45 @@ void main() {
     expect(provider.monthlyBudgetCents, originalBudget);
     expect(provider.errorMessage, isNotNull);
   });
+
+
+  test('does not overwrite corrupt state when loading fails', () async {
+    SharedPreferences.setMockInitialValues({
+      'judgy_state_v2': '{not valid json',
+    });
+
+    final provider = ExpenseProvider(clock: () => now);
+    await provider.initialized;
+
+    expect(provider.loadFailed, isTrue);
+    expect(provider.errorMessage, isNotNull);
+
+    final preferences = await SharedPreferences.getInstance();
+    final before = preferences.getString('judgy_state_v2');
+
+    final saved = await provider.addExpense(expense('new', 100, now));
+    expect(saved, isFalse);
+
+    final after = preferences.getString('judgy_state_v2');
+    expect(after, before);
+  });
+
+  test('does not overwrite unsupported-version state when loading fails', () async {
+    SharedPreferences.setMockInitialValues({
+      'judgy_state_v2': '{"version":999,"expenses":[]}',
+    });
+
+    final provider = ExpenseProvider(clock: () => now);
+    await provider.initialized;
+
+    expect(provider.loadFailed, isTrue);
+
+    final preferences = await SharedPreferences.getInstance();
+    final before = preferences.getString('judgy_state_v2');
+
+    final saved = await provider.addExpense(expense('new', 100, now));
+    expect(saved, isFalse);
+    expect(preferences.getString('judgy_state_v2'), before);
+  });
+
 }

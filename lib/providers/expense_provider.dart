@@ -41,6 +41,7 @@ class ExpenseProvider with ChangeNotifier {
   bool _isSaving = false;
   String? _warningMessage;
   String? _errorMessage;
+  bool _loadFailed = false;
 
   UnmodifiableListView<Expense> get expenses => UnmodifiableListView(_expenses);
   DateTime get now => _clock();
@@ -53,6 +54,7 @@ class ExpenseProvider with ChangeNotifier {
   bool get isSaving => _isSaving;
   String? get warningMessage => _warningMessage;
   String? get errorMessage => _errorMessage;
+  bool get loadFailed => _loadFailed;
   Future<void> get initialized => _initialized;
 
   List<Expense> get filteredExpenses {
@@ -209,6 +211,18 @@ class ExpenseProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  /// Explicitly discards the unreadable saved state so writes can resume.
+  Future<void> resetStorage() async {
+    _loadFailed = false;
+    _expenses.clear();
+    _warningMessage = null;
+    _errorMessage = null;
+    final preferences = _preferences ?? await SharedPreferences.getInstance();
+    _preferences = preferences;
+    await preferences.remove(_stateKey);
+    notifyListeners();
+  }
+
   Future<bool> _commit({
     required VoidCallback apply,
     required VoidCallback rollback,
@@ -269,6 +283,7 @@ class ExpenseProvider with ChangeNotifier {
         await _loadLegacyState(preferences);
       }
     } catch (_) {
+      _loadFailed = true;
       _errorMessage =
           'Saved data could not be opened. No existing records were changed.';
     } finally {
@@ -350,6 +365,9 @@ class ExpenseProvider with ChangeNotifier {
   }
 
   Future<void> _saveState() async {
+    if (_loadFailed) {
+      throw StateError('Saved data could not be opened; writes are blocked.');
+    }
     final preferences = _preferences ?? await SharedPreferences.getInstance();
     _preferences = preferences;
     final state = <String, dynamic>{
