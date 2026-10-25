@@ -14,9 +14,10 @@ import '../utils/judgy_quotes.dart';
 import '../widgets/app_sheet.dart';
 
 class AddExpenseSheet extends StatefulWidget {
-  const AddExpenseSheet({super.key, this.expense});
+  const AddExpenseSheet({super.key, this.expense, this.duplicate = false});
 
   final Expense? expense;
+  final bool duplicate;
 
   @override
   State<AddExpenseSheet> createState() => _AddExpenseSheetState();
@@ -100,8 +101,8 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
     });
 
     try {
-      final isEditing = widget.expense != null;
-    final expenseId = widget.expense?.id ?? const Uuid().v4();
+      final isEditing = widget.expense != null && !widget.duplicate;
+    final expenseId = isEditing ? widget.expense!.id : const Uuid().v4();
     final expense = Expense.fromEnteredAmount(
         id: expenseId,
         title: _titleController.text.trim(),

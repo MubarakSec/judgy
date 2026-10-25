@@ -8,7 +8,7 @@ import '../theme/app_theme.dart';
 import '../utils/currency_formatter.dart';
 import '../utils/expense_categories.dart';
 
-enum _ExpenseAction { edit, delete }
+enum _ExpenseAction { edit, duplicate, delete }
 
 class ExpenseTile extends StatelessWidget {
   const ExpenseTile({super.key, required this.expense});
@@ -70,6 +70,21 @@ class ExpenseTile extends StatelessWidget {
         const SnackBar(content: Text('Expense updated.')),
       );
     }
+  }
+
+  Future<void> _duplicate(BuildContext context) async {
+    final quote = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      barrierLabel: 'Close duplicate expense',
+      builder: (_) => AddExpenseSheet(expense: expense, duplicate: true),
+    );
+    if (quote == null || !context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Duplicated. $quote')),
+    );
   }
 
   @override
@@ -214,6 +229,8 @@ class ExpenseTile extends StatelessWidget {
                 onSelected: (action) {
                   if (action == _ExpenseAction.edit) {
                     _edit(context);
+                  } else if (action == _ExpenseAction.duplicate) {
+                    _duplicate(context);
                   } else if (action == _ExpenseAction.delete) {
                     _delete(context, provider);
                   }
@@ -226,6 +243,16 @@ class ExpenseTile extends StatelessWidget {
                         Icon(Icons.edit_outlined),
                         SizedBox(width: AppSpacing.sm),
                         Text('Edit'),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: _ExpenseAction.duplicate,
+                    child: Row(
+                      children: [
+                        Icon(Icons.copy_outlined),
+                        SizedBox(width: AppSpacing.sm),
+                        Text('Duplicate'),
                       ],
                     ),
                   ),
