@@ -12,12 +12,13 @@ class VoiceExpenseParser {
     'minus',
     'add',
     'remove',
+    'spent',
+    'for',
+    'on',
   };
 
   static ({String title, double? amount}) parse(String spoken) {
-    final normalized = CurrencyFormatter.parseAmount(spoken) == null
-        ? spoken
-        : spoken;
+    final normalized = spoken;
     final tokens = normalized.trim().split(RegExp(r'\s+'));
     double? amount;
     final titleTokens = <String>[];
