@@ -19,6 +19,7 @@ class ExpenseProvider with ChangeNotifier {
   static const _stateVersion = 2;
   static const _validFilters = {'Day', 'Week', 'Month'};
   static const _defaultExchangeRate = 540.0;
+  static const _maxExchangeRate = 1000000.0;
   static const _defaultBudgetCents = 50000;
   static const _maxSafeJsonInteger = 9007199254740991;
 
@@ -89,16 +90,6 @@ class ExpenseProvider with ChangeNotifier {
 
   int get monthlyRemainingCents => _monthlyBudgetCents - monthlySpentCents;
 
-  /// Compatibility view for callers that still expect a decimal USD value.
-  double get totalSpentUSD => totalSpentCents / 100;
-
-  /// Compatibility view in the currently selected display currency.
-  double get displayTotal =>
-      _isUSD ? totalSpentUSD : totalSpentUSD * _exchangeRate;
-
-  double get displayBudget =>
-      _isUSD ? monthlyBudget : monthlyBudget * _exchangeRate;
-
   double get budgetProgress {
     if (_monthlyBudgetCents <= 0) return 0;
     return (monthlySpentCents / _monthlyBudgetCents).clamp(0.0, 1.0);
@@ -121,7 +112,7 @@ class ExpenseProvider with ChangeNotifier {
   }
 
   Future<bool> updateSettings(double rate, double budget) {
-    if (!rate.isFinite || rate <= 0 || !budget.isFinite || budget < 0) {
+    if (!rate.isFinite || rate <= 0 || rate > _maxExchangeRate || !budget.isFinite || budget < 0) {
       _setError('Enter a valid exchange rate and a budget of zero or more.');
       return Future.value(false);
     }

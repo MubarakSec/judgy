@@ -6,6 +6,7 @@ import 'dart:convert';
 /// call sites should prefer [amountCents] or [Expense.fromEnteredAmount].
 class Expense {
   static const int _maxSafeJsonInteger = 9007199254740991;
+  static const double _maxExchangeRate = 1000000.0;
 
   final String id;
   final String title;
@@ -53,7 +54,7 @@ class Expense {
         : _validateCurrency(originalCurrency);
     final validatedRate = exchangeRateAtEntry == null
         ? null
-        : _validatePositiveFinite(exchangeRateAtEntry, 'exchangeRateAtEntry');
+        : _validateExchangeRate(exchangeRateAtEntry, 'exchangeRateAtEntry');
 
     return Expense._(
       id: _validateText(id, 'id'),
@@ -89,7 +90,7 @@ class Expense {
     required String category,
   }) {
     final normalizedCurrency = _validateCurrency(currency);
-    final normalizedRate = _validatePositiveFinite(
+    final normalizedRate = _validateExchangeRate(
       exchangeRate,
       'exchangeRate',
     );
@@ -257,6 +258,18 @@ class Expense {
       throw ArgumentError.value(value, field, 'must be finite and positive');
     }
     return value;
+  }
+
+  static double _validateExchangeRate(double value, String field) {
+    final result = _validatePositiveFinite(value, field);
+    if (result > _maxExchangeRate) {
+      throw ArgumentError.value(
+        value,
+        field,
+        'must not exceed $_maxExchangeRate',
+      );
+    }
+    return result;
   }
 
   static String _validateCurrency(String value) {

@@ -43,7 +43,8 @@ class TotalSpentCard extends StatelessWidget {
       container: true,
       label: hasBudget
           ? '$periodLabel: $spent. Monthly budget: $budget. '
-                '${provider.isOverBudget ? '$remaining over budget' : '$remaining remaining'}.'
+                '${provider.isOverBudget ? '$remaining over budget' : '$remaining remaining'}. '
+                '$percentageLabel% used.'
           : '$periodLabel: $spent. No monthly budget set.',
       child: ExcludeSemantics(
         child: Container(
@@ -126,19 +127,15 @@ class TotalSpentCard extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: AppSpacing.sm),
-                Semantics(
-                  label: 'Monthly budget used',
-                  value: '$percentageLabel percent',
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(AppRadii.small),
-                    child: LinearProgressIndicator(
-                      value: provider.budgetProgress,
-                      minHeight: 8,
-                      color: provider.isOverBudget
-                          ? AppColors.danger
-                          : AppColors.accent,
-                      backgroundColor: AppColors.input,
-                    ),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(AppRadii.small),
+                  child: LinearProgressIndicator(
+                    value: provider.budgetProgress,
+                    minHeight: 8,
+                    color: provider.isOverBudget
+                        ? AppColors.danger
+                        : AppColors.accent,
+                    backgroundColor: AppColors.input,
                   ),
                 ),
                 const SizedBox(height: AppSpacing.sm),
