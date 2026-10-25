@@ -5,7 +5,7 @@
 
 ## High
 - [x] Centralize categories (label, icon, quotes) in one registry; remove duplicates.
-- [ ] Date picker + edit expense (backdated entries, edit flow).
+- [x] Date picker + edit expense (backdated entries, edit flow).
 - [x] Release identity: applicationId/package name, signing config; update README (Android-only).
 - [ ] Storage abstraction: repository interface + move from SharedPreferences to SQLite/drift (before search/export).
 

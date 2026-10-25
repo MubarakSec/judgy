@@ -150,6 +150,28 @@ class ExpenseProvider with ChangeNotifier {
     );
   }
 
+  Future<bool> updateExpense(Expense updated) {
+    final previous = _expenses
+        .where((expense) => expense.id == updated.id)
+        .cast<Expense?>()
+        .firstOrNull;
+    if (previous == null) return Future.value(false);
+
+    return _commit(
+      apply: () {
+        _expenses.removeWhere((expense) => expense.id == updated.id);
+        _expenses.add(updated);
+        _expenses.sort((a, b) => b.date.compareTo(a.date));
+      },
+      rollback: () {
+        _expenses.removeWhere((expense) => expense.id == updated.id);
+        _expenses.add(previous);
+        _expenses.sort((a, b) => b.date.compareTo(a.date));
+      },
+      failureMessage: 'Expense could not be updated. Please try again.',
+    );
+  }
+
   Future<ExpenseRemoval?> removeExpense(String id) {
     return _enqueue(() async {
       final index = _expenses.indexWhere((expense) => expense.id == id);

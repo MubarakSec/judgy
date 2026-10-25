@@ -3,11 +3,12 @@ import 'package:provider/provider.dart';
 
 import '../models/expense.dart';
 import '../providers/expense_provider.dart';
+import '../screens/add_expense_sheet.dart';
 import '../theme/app_theme.dart';
 import '../utils/currency_formatter.dart';
 import '../utils/expense_categories.dart';
 
-enum _ExpenseAction { delete }
+enum _ExpenseAction { edit, delete }
 
 class ExpenseTile extends StatelessWidget {
   const ExpenseTile({super.key, required this.expense});
@@ -53,6 +54,22 @@ class ExpenseTile extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _edit(BuildContext context) async {
+    final updated = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      barrierLabel: 'Close edit expense',
+      builder: (_) => AddExpenseSheet(expense: expense),
+    );
+    if (updated == true && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Expense updated.')),
+      );
+    }
   }
 
   @override
@@ -195,11 +212,23 @@ class ExpenseTile extends StatelessWidget {
                 tooltip: 'More actions for ${expense.title}',
                 icon: const Icon(Icons.more_vert),
                 onSelected: (action) {
-                  if (action == _ExpenseAction.delete) {
+                  if (action == _ExpenseAction.edit) {
+                    _edit(context);
+                  } else if (action == _ExpenseAction.delete) {
                     _delete(context, provider);
                   }
                 },
                 itemBuilder: (context) => const [
+                  PopupMenuItem(
+                    value: _ExpenseAction.edit,
+                    child: Row(
+                      children: [
+                        Icon(Icons.edit_outlined),
+                        SizedBox(width: AppSpacing.sm),
+                        Text('Edit'),
+                      ],
+                    ),
+                  ),
                   PopupMenuItem(
                     value: _ExpenseAction.delete,
                     child: Row(

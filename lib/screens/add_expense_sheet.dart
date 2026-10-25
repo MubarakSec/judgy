@@ -13,7 +13,9 @@ import '../utils/judgy_quotes.dart';
 import '../widgets/app_sheet.dart';
 
 class AddExpenseSheet extends StatefulWidget {
-  const AddExpenseSheet({super.key});
+  const AddExpenseSheet({super.key, this.expense});
+
+  final Expense? expense;
 
   @override
   State<AddExpenseSheet> createState() => _AddExpenseSheetState();
@@ -24,10 +26,28 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
   final _titleController = TextEditingController();
   final _amountController = TextEditingController();
   String _selectedCategory = ExpenseCategory.labels.first;
+  late DateTime _selectedDate;
   String? _submitError;
   bool _isSubmitting = false;
   final SpeechToText _speech = SpeechToText();
   bool _isListening = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final expense = widget.expense;
+    final provider = context.read<ExpenseProvider>();
+    _selectedDate = expense?.date ?? provider.now;
+    if (expense != null) {
+      _titleController.text = expense.title;
+      _selectedCategory = expense.category;
+      final currentIsUsd = provider.isUSD;
+      final amount = currentIsUsd
+          ? expense.amount
+          : expense.amount * provider.exchangeRate;
+      _amountController.text = amount.toStringAsFixed(currentIsUsd ? 2 : 0);
+    }
+  }
 
   @override
   void dispose() {
@@ -79,21 +99,30 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
     });
 
     try {
-      final expense = Expense.fromEnteredAmount(
-        id: DateTime.now().microsecondsSinceEpoch.toString(),
+      final isEditing = widget.expense != null;
+    final expenseId = widget.expense?.id ??
+        DateTime.now().microsecondsSinceEpoch.toString();
+    final expense = Expense.fromEnteredAmount(
+        id: expenseId,
         title: _titleController.text.trim(),
         enteredAmount: enteredAmount,
         currency: provider.isUSD ? 'USD' : 'YER',
         exchangeRate: provider.exchangeRate,
-        date: provider.now,
+        date: _selectedDate,
         category: _selectedCategory,
       );
-      final saved = await provider.addExpense(expense);
+      final saved = isEditing
+          ? await provider.updateExpense(expense)
+          : await provider.addExpense(expense);
       if (!mounted) return;
 
       if (saved) {
-        final quote = JudgyQuotes.getQuote(_selectedCategory, expense.amount);
-        Navigator.of(context).pop(quote);
+        if (isEditing) {
+          Navigator.of(context).pop(true);
+        } else {
+          final quote = JudgyQuotes.getQuote(_selectedCategory, expense.amount);
+          Navigator.of(context).pop(quote);
+        }
       } else {
         setState(() {
           _submitError = provider.errorMessage ?? 'Expense could not be saved.';
@@ -169,6 +198,26 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
                 return null;
               },
               onFieldSubmitted: (_) => FocusScope.of(context).unfocus(),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            OutlinedButton.icon(
+              onPressed: _isSubmitting
+                  ? null
+                  : () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: _selectedDate,
+                        firstDate: DateTime(2000),
+                        lastDate: DateTime.now().add(const Duration(days: 1)),
+                      );
+                      if (picked != null && mounted) {
+                        setState(() => _selectedDate = picked);
+                      }
+                    },
+              icon: const Icon(Icons.calendar_today_outlined),
+              label: Text(
+                MaterialLocalizations.of(context).formatMediumDate(_selectedDate),
+              ),
             ),
             const SizedBox(height: AppSpacing.md),
             DropdownButtonFormField<String>(
