@@ -10,6 +10,7 @@ import '../utils/currency_formatter.dart';
 import 'add_expense_sheet.dart';
 import 'settings_sheet.dart';
 import 'insights_sheet.dart';
+import 'recurring_sheet.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, this.openAddOnStart = false});
@@ -83,6 +84,17 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Future<void> _openRecurring(BuildContext context) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      barrierLabel: 'Close recurring expenses',
+      builder: (_) => const RecurringSheet(),
+    );
+  }
+
   Future<void> _toggleCurrency(
     BuildContext context,
     ExpenseProvider provider,
@@ -135,6 +147,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   ? null
                   : () => _toggleCurrency(context, provider),
             ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.repeat_outlined),
+            tooltip: 'Recurring expenses',
+            onPressed: () => _openRecurring(context),
           ),
           IconButton(
             icon: const Icon(Icons.insights_outlined),

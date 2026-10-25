@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/expense.dart';
+import '../models/recurring_expense.dart';
 import '../utils/expense_csv.dart';
 import '../services/quick_add_notifications.dart';
 
@@ -45,10 +46,12 @@ class ExpenseProvider with ChangeNotifier {
   String? _warningMessage;
   String? _errorMessage;
   bool _loadFailed = false;
+  final List<RecurringExpense> _recurringExpenses = [];
   int _lastBudgetAlertLevel = 0;
   int _budgetAlertPeriod = 0;
 
   UnmodifiableListView<Expense> get expenses => UnmodifiableListView(_expenses);
+  UnmodifiableListView<RecurringExpense> get recurringExpenses => UnmodifiableListView(_recurringExpenses);
   DateTime get now => _clock();
   bool get isUSD => _isUSD;
   double get exchangeRate => _exchangeRate;
@@ -293,6 +296,7 @@ class ExpenseProvider with ChangeNotifier {
       'isUSD': _isUSD,
       'exchangeRate': _exchangeRate,
       'monthlyBudgetCents': _monthlyBudgetCents,
+      'recurringExpenses': _recurringExpenses.map((item) => item.toMap()).toList(),
       'lastBudgetAlertLevel': _lastBudgetAlertLevel,
       'budgetAlertPeriod': _budgetAlertPeriod,
       'expenses': _expenses.map((expense) => expense.toMap()).toList(),
@@ -325,6 +329,10 @@ class ExpenseProvider with ChangeNotifier {
         _budgetAlertPeriod = currentPeriod;
       }
       final importedExpenses = _parseExpenseRows(state['expenses']).toList();
+      final importedRecurring = _parseRecurringRows(state['recurringExpenses']).toList();
+      _recurringExpenses
+        ..clear()
+        ..addAll(importedRecurring);
 
       _isUSD = isUSD;
       _exchangeRate = exchangeRate;
@@ -410,6 +418,85 @@ class ExpenseProvider with ChangeNotifier {
       notifyListeners();
       return false;
     });
+  }
+
+  Future<bool> addRecurring(RecurringExpense recurring) {
+    return _enqueue(() async {
+      _recurringExpenses.add(recurring);
+      _beginSaving();
+      try {
+        await _saveState();
+        return true;
+      } catch (_) {
+        _recurringExpenses.removeWhere((item) => item.id == recurring.id);
+        _errorMessage = 'Recurring expense could not be saved.';
+        return false;
+      } finally {
+        _finishSaving();
+      }
+    });
+  }
+
+  Future<bool> removeRecurring(String id) {
+    final index = _recurringExpenses.indexWhere((item) => item.id == id);
+    if (index < 0) return Future.value(false);
+    final removed = _recurringExpenses.removeAt(index);
+    return _enqueue(() async {
+      _beginSaving();
+      try {
+        await _saveState();
+        return true;
+      } catch (_) {
+        _recurringExpenses.insert(index.clamp(0, _recurringExpenses.length), removed);
+        _errorMessage = 'Recurring expense could not be removed.';
+        return false;
+      } finally {
+        _finishSaving();
+      }
+    });
+  }
+
+  Future<bool> applyRecurring(String id) async {
+    final recurring = _recurringExpenses.firstWhere(
+      (item) => item.id == id,
+      orElse: () => throw StateError('missing'),
+    );
+    final now = _clock();
+    if (recurring.lastApplied != null &&
+        recurring.lastApplied!.year == now.year &&
+        recurring.lastApplied!.month == now.month) {
+      _errorMessage = 'This recurring expense was already applied this month.';
+      notifyListeners();
+      return false;
+    }
+
+    final day = recurring.dayOfMonth.clamp(1, _daysInMonth(now.year, now.month));
+    final date = DateTime(now.year, now.month, day);
+    final expense = Expense(
+      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      title: recurring.title,
+      amountCents: recurring.amountCents,
+      date: date,
+      category: recurring.category,
+    );
+
+    final saved = await addExpense(expense);
+    if (!saved) return false;
+
+    final index = _recurringExpenses.indexWhere((item) => item.id == id);
+    if (index >= 0) {
+      _recurringExpenses[index] = recurring.copyWith(lastApplied: now);
+      try {
+        await _saveState();
+      } catch (_) {
+        // Expense was added; recurring metadata is best-effort.
+      }
+    }
+    return true;
+  }
+
+  static int _daysInMonth(int year, int month) {
+    return DateTime(year, month + 1, 0).day;
   }
 
   Future<bool> _commit({
@@ -506,6 +593,11 @@ class ExpenseProvider with ChangeNotifier {
       _lastBudgetAlertLevel = 0;
       _budgetAlertPeriod = currentPeriod;
     }
+    final rawRecurring = state['recurringExpenses'];
+    _recurringExpenses
+      ..clear()
+      ..addAll(_parseRecurringRows(rawRecurring));
+
     _expenses
       ..clear()
       ..addAll(_parseExpenseRows(state['expenses']));
@@ -562,6 +654,18 @@ class ExpenseProvider with ChangeNotifier {
     }
   }
 
+  Iterable<RecurringExpense> _parseRecurringRows(dynamic rawRows) sync* {
+    if (rawRows is! List) return;
+    for (final rawRow in rawRows) {
+      try {
+        if (rawRow is! Map) throw const FormatException();
+        yield RecurringExpense.fromMap(Map<String, dynamic>.from(rawRow));
+      } catch (_) {
+        // Skip damaged recurring rows.
+      }
+    }
+  }
+
   Future<void> _saveState() async {
     if (_loadFailed) {
       throw StateError('Saved data could not be opened; writes are blocked.');
@@ -573,6 +677,7 @@ class ExpenseProvider with ChangeNotifier {
       'isUSD': _isUSD,
       'exchangeRate': _exchangeRate,
       'monthlyBudgetCents': _monthlyBudgetCents,
+      'recurringExpenses': _recurringExpenses.map((item) => item.toMap()).toList(),
       'lastBudgetAlertLevel': _lastBudgetAlertLevel,
       'budgetAlertPeriod': _budgetAlertPeriod,
       'expenses': _expenses.map((expense) => expense.toMap()).toList(),
