@@ -152,6 +152,36 @@ class _SettingsSheetState extends State<SettingsSheet> {
     }
   }
 
+  Future<void> _resetAll() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Reset all data?'),
+          content: const Text(
+            'This removes all expenses and settings from this device.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Reset'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isSaving = true);
+    await context.read<ExpenseProvider>().resetStorage();
+    if (!mounted) return;
+    Navigator.of(context).pop(true);
+  }
+
   Future<void> _save() async {
     if (_isSaving || !_formKey.currentState!.validate()) return;
 
@@ -302,6 +332,12 @@ class _SettingsSheetState extends State<SettingsSheet> {
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            OutlinedButton.icon(
+              onPressed: _isSaving ? null : _resetAll,
+              icon: const Icon(Icons.delete_forever_outlined),
+              label: const Text('Reset all data'),
             ),
           ],
         ),

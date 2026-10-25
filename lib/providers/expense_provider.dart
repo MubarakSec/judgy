@@ -299,6 +299,16 @@ class ExpenseProvider with ChangeNotifier {
   Future<void> resetStorage() async {
     _loadFailed = false;
     _expenses.clear();
+    _recurringExpenses.clear();
+    _isUSD = true;
+    _exchangeRate = _defaultExchangeRate;
+    _monthlyBudgetCents = _defaultBudgetCents;
+    _timeFilter = 'Month';
+    _customRangeStart = null;
+    _customRangeEnd = null;
+    _autoApplyRecurring = false;
+    _lastBudgetAlertLevel = 0;
+    _budgetAlertPeriod = _clock().year * 100 + _clock().month;
     _warningMessage = null;
     _errorMessage = null;
     final preferences = _preferences ?? await SharedPreferences.getInstance();
