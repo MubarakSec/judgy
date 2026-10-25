@@ -1,21 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import 'providers/expense_provider.dart';
 import 'screens/home_screen.dart';
+import 'services/quick_add_notifications.dart';
 import 'theme/app_theme.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  final launchPayload = await QuickAddNotifications.initialize();
   runApp(
     MultiProvider(
       providers: [ChangeNotifierProvider(create: (_) => ExpenseProvider())],
-      child: const JudgyApp(),
+      child: JudgyApp(openAddOnStart: launchPayload == 'add'),
     ),
   );
 }
 
 class JudgyApp extends StatelessWidget {
-  const JudgyApp({super.key});
+  const JudgyApp({super.key, this.openAddOnStart = false});
+
+  final bool openAddOnStart;
 
   @override
   Widget build(BuildContext context) {
@@ -23,7 +28,7 @@ class JudgyApp extends StatelessWidget {
       title: 'Judgy',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.dark,
-      home: const HomeScreen(),
+      home: HomeScreen(openAddOnStart: openAddOnStart),
     );
   }
 }

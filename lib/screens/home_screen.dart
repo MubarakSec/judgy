@@ -9,8 +9,25 @@ import '../widgets/total_spent_card.dart';
 import 'add_expense_sheet.dart';
 import 'settings_sheet.dart';
 
-class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key});
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key, this.openAddOnStart = false});
+
+  final bool openAddOnStart;
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    if (widget.openAddOnStart) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _openAddExpense(context);
+      });
+    }
+  }
 
   Future<void> _openAddExpense(BuildContext context) async {
     final quote = await showModalBottomSheet<String>(

@@ -37,6 +37,7 @@ dependencies:
   shared_preferences: ^2.5.5
   provider: ^6.1.5+1
   speech_to_text: ^7.5.0
+  flutter_local_notifications: ^22.3.3
 
 dev_dependencies:
   flutter_test:
