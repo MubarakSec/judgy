@@ -1,6 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:local_auth/local_auth.dart';
 
 import '../providers/expense_provider.dart';
 import '../theme/app_theme.dart';
@@ -9,6 +10,8 @@ import '../widgets/time_filter_tabs.dart';
 import '../widgets/total_spent_card.dart';
 import '../models/expense.dart';
 import '../utils/currency_formatter.dart';
+import '../services/quick_add_notifications.dart';
+import '../widgets/app_lock_gate.dart';
 import 'add_expense_sheet.dart';
 import 'settings_sheet.dart';
 import 'insights_sheet.dart';
@@ -23,16 +26,20 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final TextEditingController _searchController = TextEditingController();
-  final LocalAuthentication _localAuth = LocalAuthentication();
-  bool _unlocked = true;
-  bool _authenticating = false;
+  bool _ready = false;
+  bool _pendingAdd = false;
+  bool _addSheetOpen = false;
+  late final ExpenseProvider _provider;
   String _searchQuery = '';
   String _sortMode = 'Date';
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    AppLockGate.sessionUnlocked.removeListener(_sessionChanged);
+    QuickAddNotifications.addRequests.removeListener(_notificationAdd);
     _searchController.dispose();
     super.dispose();
   }
@@ -40,37 +47,63 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    final provider = context.read<ExpenseProvider>();
-    if (provider.requireBiometric) {
-      _unlocked = false;
-      WidgetsBinding.instance.addPostFrameCallback((_) => _authenticate());
-    }
-    if (widget.openAddOnStart) {
+    _provider = context.read<ExpenseProvider>();
+    AppLockGate.sessionUnlocked.addListener(_sessionChanged);
+    WidgetsBinding.instance.addObserver(this);
+    QuickAddNotifications.addRequests.addListener(_notificationAdd);
+    _pendingAdd = widget.openAddOnStart;
+    unawaited(_initialize());
+  }
+
+  Future<void> _initialize() async {
+    await _provider.initialized;
+    if (!mounted) return;
+    setState(() => _ready = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _openPendingAdd();
+    });
+  }
+
+  void _sessionChanged() {
+    if (AppLockGate.sessionUnlocked.value) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _openAddExpense(context);
+        if (mounted) {
+          _openPendingAdd();
+          unawaited(_provider.reconcileRecurring());
+        }
       });
     }
   }
 
-  Future<void> _authenticate() async {
-    if (_authenticating) return;
-    setState(() => _authenticating = true);
-    try {
-      final ok = await _localAuth.authenticate(
-        localizedReason: 'Unlock Judgy',
-      );
-      if (mounted) {
-        setState(() {
-          _unlocked = ok;
-          _authenticating = false;
-        });
-      }
-    } catch (_) {
-      if (mounted) setState(() => _authenticating = false);
+  void _notificationAdd() {
+    _pendingAdd = true;
+    _openPendingAdd();
+  }
+
+  void _openPendingAdd() {
+    if (!_pendingAdd ||
+        !mounted ||
+        !_ready ||
+        _addSheetOpen ||
+        !AppLockGate.sessionUnlocked.value) {
+      return;
+    }
+    _pendingAdd = false;
+    unawaited(_openAddExpense(context));
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed &&
+        _ready &&
+        AppLockGate.sessionUnlocked.value) {
+      unawaited(_provider.reconcileRecurring());
     }
   }
 
   Future<void> _openAddExpense(BuildContext context) async {
+    if (_addSheetOpen || !_ready || !AppLockGate.sessionUnlocked.value) return;
+    _addSheetOpen = true;
     final quote = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
@@ -79,6 +112,7 @@ class _HomeScreenState extends State<HomeScreen> {
       barrierLabel: 'Close add expense',
       builder: (_) => const AddExpenseSheet(),
     );
+    _addSheetOpen = false;
     if (quote == null || !context.mounted) return;
 
     ScaffoldMessenger.of(
@@ -143,33 +177,26 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<ExpenseProvider>();
-    if (provider.requireBiometric && !_unlocked) {
-      return Scaffold(
-        body: Center(
-          child: FilledButton.icon(
-            onPressed: _authenticating ? null : _authenticate,
-            icon: const Icon(Icons.lock_outline),
-            label: Text(_authenticating ? 'Unlocking…' : 'Unlock Judgy'),
-          ),
-        ),
-      );
+    if (!_ready) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     final filtered = provider.filteredExpenses;
     final query = _searchQuery.trim().toLowerCase();
     final visibleExpenses = query.isEmpty
         ? filtered
         : filtered
-            .where(
-              (expense) =>
-                  expense.title.toLowerCase().contains(query) ||
-                  expense.category.toLowerCase().contains(query) ||
-                  CurrencyFormatter.displayFromUsdCents(
-                    usdCents: expense.amountCents,
-                    isUsd: provider.isUSD,
-                    exchangeRate: provider.exchangeRate,
-                  ).toLowerCase().contains(query),
-            )
-            .toList(growable: false);
+              .where(
+                (expense) =>
+                    expense.title.toLowerCase().contains(query) ||
+                    expense.category.toLowerCase().contains(query) ||
+                    (expense.note?.toLowerCase().contains(query) ?? false) ||
+                    CurrencyFormatter.displayFromUsdCents(
+                      usdCents: expense.amountCents,
+                      isUsd: provider.isUSD,
+                      exchangeRate: provider.exchangeRate,
+                    ).toLowerCase().contains(query),
+              )
+              .toList(growable: false);
     final sortedExpenses = List<Expense>.from(visibleExpenses);
     switch (_sortMode) {
       case 'Amount':
@@ -199,97 +226,154 @@ class _HomeScreenState extends State<HomeScreen> {
                   : () => _toggleCurrency(context, provider),
             ),
           ),
-          IconButton(
-            icon: const Icon(Icons.repeat_outlined),
-            tooltip: 'Recurring expenses',
-            onPressed: () => _openRecurring(context),
-          ),
-          IconButton(
-            icon: const Icon(Icons.insights_outlined),
-            tooltip: 'Spending insights',
-            onPressed: () => _openInsights(context),
+          PopupMenuButton<String>(
+            tooltip: 'More options',
+            icon: const Icon(Icons.more_horiz_rounded),
+            onSelected: (value) => value == 'insights'
+                ? _openInsights(context)
+                : _openRecurring(context),
+            itemBuilder: (_) => const [
+              PopupMenuItem(
+                value: 'insights',
+                child: ListTile(
+                  leading: Icon(Icons.insights_outlined),
+                  title: Text('Spending insights'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              PopupMenuItem(
+                value: 'recurring',
+                child: ListTile(
+                  leading: Icon(Icons.repeat_outlined),
+                  title: Text('Recurring expenses'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+            ],
           ),
           IconButton(
             icon: const Icon(Icons.tune),
             tooltip: 'Budget and currency settings',
-            onPressed: () => _openSettings(context),
+            onPressed: provider.isLoading || provider.isSaving
+                ? null
+                : () => _openSettings(context),
           ),
           const SizedBox(width: AppSpacing.xs),
         ],
       ),
       body: provider.isLoading
           ? const _LoadingHome()
-          : Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: AppSpacing.xs),
-                  const TimeFilterTabs(),
-                  const SizedBox(height: AppSpacing.sm),
-                  TextField(
-                    controller: _searchController,
-                    textInputAction: TextInputAction.search,
-                    decoration: const InputDecoration(
-                      hintText: 'Search expenses, categories, amounts…',
-                      prefixIcon: Icon(Icons.search),
+          : CustomScrollView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              slivers: [
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.lg,
+                  ),
+                  sliver: SliverToBoxAdapter(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: AppSpacing.xs),
+                        const TimeFilterTabs(),
+                        const SizedBox(height: AppSpacing.sm),
+                        TextField(
+                          controller: _searchController,
+                          textInputAction: TextInputAction.search,
+                          decoration: InputDecoration(
+                            hintText: 'Search expenses',
+                            prefixIcon: const Icon(Icons.search_rounded),
+                            suffixIcon: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (_searchQuery.isNotEmpty)
+                                  IconButton(
+                                    tooltip: 'Clear search',
+                                    icon: const Icon(Icons.close, size: 20),
+                                    onPressed: () => setState(() {
+                                      _searchQuery = '';
+                                      _searchController.clear();
+                                    }),
+                                  ),
+                                PopupMenuButton<String>(
+                                  tooltip: 'Sort expenses',
+                                  initialValue: _sortMode,
+                                  icon: Icon(
+                                    Icons.sort_rounded,
+                                    color: _sortMode == 'Date'
+                                        ? AppColors.textSecondary
+                                        : AppColors.accent,
+                                  ),
+                                  onSelected: (value) =>
+                                      setState(() => _sortMode = value),
+                                  itemBuilder: (_) => [
+                                    for (final entry in const {
+                                      'Date': 'Newest first',
+                                      'Amount': 'Highest amount',
+                                      'Title': 'Name A–Z',
+                                    }.entries)
+                                      CheckedPopupMenuItem(
+                                        value: entry.key,
+                                        checked: _sortMode == entry.key,
+                                        child: Text(entry.value),
+                                      ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          onChanged: (value) =>
+                              setState(() => _searchQuery = value),
+                        ),
+                        if (provider.errorMessage != null ||
+                            provider.warningMessage != null) ...[
+                          const SizedBox(height: AppSpacing.md),
+                          _StatusNotice(
+                            message:
+                                provider.errorMessage ??
+                                provider.warningMessage!,
+                            isError: provider.errorMessage != null,
+                            onDismiss: provider.errorMessage != null
+                                ? provider.clearError
+                                : provider.clearWarning,
+                          ),
+                        ],
+                        const SizedBox(height: AppSpacing.md),
+                        const TotalSpentCard(),
+                        const SizedBox(height: AppSpacing.lg),
+                        Text(
+                          'Recent expenses',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                      ],
                     ),
-                    onChanged: (value) => setState(() => _searchQuery = value),
                   ),
-                  const SizedBox(height: AppSpacing.sm),
-                  DropdownButtonFormField<String>(
-                    initialValue: _sortMode,
-                    decoration: const InputDecoration(labelText: 'Sort by'),
-                    items: const [
-                      DropdownMenuItem(value: 'Date', child: Text('Date')),
-                      DropdownMenuItem(value: 'Amount', child: Text('Amount')),
-                      DropdownMenuItem(value: 'Title', child: Text('Title')),
-                    ],
-                    onChanged: (value) {
-                      if (value != null) setState(() => _sortMode = value);
-                    },
+                ),
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.lg,
                   ),
-                  if (provider.errorMessage != null ||
-                      provider.warningMessage != null) ...[
-                    const SizedBox(height: AppSpacing.md),
-                    _StatusNotice(
-                      message:
-                          provider.errorMessage ?? provider.warningMessage!,
-                      isError: provider.errorMessage != null,
-                      onDismiss: provider.errorMessage != null
-                          ? provider.clearError
-                          : provider.clearWarning,
-                    ),
-                  ],
-                  const SizedBox(height: AppSpacing.md),
-                  const TotalSpentCard(),
-                  const SizedBox(height: AppSpacing.lg),
-                  Text(
-                    'Recent expenses',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  Expanded(
-                    child: sortedExpenses.isEmpty
-                        ? _EmptyState(
+                  sliver: sortedExpenses.isEmpty
+                      ? SliverFillRemaining(
+                          hasScrollBody: false,
+                          child: _EmptyState(
                             hasAnyExpenses: provider.expenses.isNotEmpty,
                             period: query.isEmpty
                                 ? provider.timeFilter.toLowerCase()
                                 : 'matching "$_searchQuery"',
                             onAdd: () => _openAddExpense(context),
-                          )
-                        : ListView.builder(
-                            padding: const EdgeInsets.only(bottom: 104),
-                            keyboardDismissBehavior:
-                                ScrollViewKeyboardDismissBehavior.onDrag,
-                            itemCount: sortedExpenses.length,
-                            itemBuilder: (_, index) {
-                              return ExpenseTile(expense: sortedExpenses[index]);
-                            },
                           ),
-                  ),
-                ],
-              ),
+                        )
+                      : SliverList.builder(
+                          itemCount: sortedExpenses.length,
+                          itemBuilder: (_, index) =>
+                              ExpenseTile(expense: sortedExpenses[index]),
+                        ),
+                ),
+                if (sortedExpenses.isNotEmpty)
+                  const SliverToBoxAdapter(child: SizedBox(height: 104)),
+              ],
             ),
       floatingActionButton: !provider.isLoading && filtered.isNotEmpty
           ? FloatingActionButton.extended(

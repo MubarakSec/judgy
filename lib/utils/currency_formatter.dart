@@ -1,6 +1,8 @@
 class CurrencyFormatter {
   const CurrencyFormatter._();
 
+  static String normalizeDigits(String value) => _normalizeDigits(value);
+
   static String usdFromCents(int cents, {bool includeSign = true}) {
     final negative = cents < 0;
     final absolute = cents.abs();

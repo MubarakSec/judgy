@@ -68,9 +68,9 @@ class ExpenseTile extends StatelessWidget {
       builder: (_) => AddExpenseSheet(expense: expense),
     );
     if (updated == true && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Expense updated.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Expense updated.')));
     }
   }
 
@@ -84,18 +84,22 @@ class ExpenseTile extends StatelessWidget {
       builder: (_) => AddExpenseSheet(expense: expense, duplicate: true),
     );
     if (quote == null || !context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Duplicated. $quote')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Duplicated. $quote')));
   }
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<ExpenseProvider>();
+    final provider = context.read<ExpenseProvider>();
+    final isUSD = context.select<ExpenseProvider, bool>((p) => p.isUSD);
+    final exchangeRate = context.select<ExpenseProvider, double>(
+      (p) => p.exchangeRate,
+    );
     final amount = CurrencyFormatter.displayFromUsdCents(
       usdCents: expense.amountCents,
-      isUsd: provider.isUSD,
-      exchangeRate: provider.exchangeRate,
+      isUsd: isUSD,
+      exchangeRate: exchangeRate,
     );
     final date = MaterialLocalizations.of(
       context,
@@ -103,7 +107,7 @@ class ExpenseTile extends StatelessWidget {
     final originalAmount =
         expense.originalAmountMinorUnits == null ||
             expense.originalCurrency == null ||
-            (expense.originalCurrency == 'USD' && provider.isUSD)
+            (expense.originalCurrency == 'USD' && isUSD)
         ? null
         : CurrencyFormatter.originalAmount(
             minorUnits: expense.originalAmountMinorUnits!,
