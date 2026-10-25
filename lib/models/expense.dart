@@ -13,6 +13,7 @@ class Expense {
   final int amountCents;
   final DateTime date;
   final String category;
+  final String? note;
 
   /// The entered value in hundredths of [originalCurrency], when known.
   final int? originalAmountMinorUnits;
@@ -30,6 +31,7 @@ class Expense {
     double? amount,
     required DateTime date,
     required String category,
+    String? note,
     int? originalAmountMinorUnits,
     String? originalCurrency,
     double? exchangeRateAtEntry,
@@ -55,6 +57,7 @@ class Expense {
     final validatedRate = exchangeRateAtEntry == null
         ? null
         : _validateExchangeRate(exchangeRateAtEntry, 'exchangeRateAtEntry');
+    final validatedNote = note == null ? null : _validateNote(note);
 
     return Expense._(
       id: _validateText(id, 'id'),
@@ -62,6 +65,7 @@ class Expense {
       amountCents: validatedAmountCents,
       date: date,
       category: _validateText(category, 'category'),
+      note: validatedNote,
       originalAmountMinorUnits: validatedOriginalAmount,
       originalCurrency: validatedCurrency,
       exchangeRateAtEntry: validatedRate,
@@ -74,6 +78,7 @@ class Expense {
     required this.amountCents,
     required this.date,
     required this.category,
+    required this.note,
     required this.originalAmountMinorUnits,
     required this.originalCurrency,
     required this.exchangeRateAtEntry,
@@ -88,6 +93,7 @@ class Expense {
     required double exchangeRate,
     required DateTime date,
     required String category,
+    String? note,
   }) {
     final normalizedCurrency = _validateCurrency(currency);
     final normalizedRate = _validateExchangeRate(
@@ -108,6 +114,7 @@ class Expense {
       amountCents: _usdDoubleToCents(usdAmount, 'USD amount'),
       date: date,
       category: category,
+      note: note,
       originalAmountMinorUnits: originalMinorUnits,
       originalCurrency: normalizedCurrency,
       exchangeRateAtEntry: normalizedRate,
@@ -128,6 +135,7 @@ class Expense {
       'amountCents': amountCents,
       'date': date.toIso8601String(),
       'category': category,
+      if (note != null && note!.isNotEmpty) 'note': note,
       if (originalAmountMinorUnits != null)
         'originalAmountMinorUnits': originalAmountMinorUnits,
       if (originalCurrency != null) 'originalCurrency': originalCurrency,
@@ -155,6 +163,7 @@ class Expense {
       amountCents: amountCents,
       date: DateTime.parse(rawDate),
       category: _parseString(map['category'], 'category'),
+      note: map['note'] is String ? (map['note'] as String).trim() : null,
       originalAmountMinorUnits: rawOriginalAmount == null
           ? null
           : _parsePositiveInteger(
@@ -278,6 +287,11 @@ class Expense {
       throw ArgumentError.value(value, 'currency', 'must be a 3-letter code');
     }
     return normalized;
+  }
+
+  static String? _validateNote(String value) {
+    final normalized = value.trim();
+    return normalized.isEmpty ? null : normalized;
   }
 
   static String _validateText(String value, String field) {

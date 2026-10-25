@@ -27,6 +27,7 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _amountController = TextEditingController();
+  final _noteController = TextEditingController();
   String _selectedCategory = ExpenseCategory.labels.first;
   late DateTime _selectedDate;
   String? _submitError;
@@ -42,6 +43,7 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
     _selectedDate = expense?.date ?? provider.now;
     if (expense != null) {
       _titleController.text = expense.title;
+      _noteController.text = expense.note ?? '';
       _selectedCategory = expense.category;
       final currentIsUsd = provider.isUSD;
       final amount = currentIsUsd
@@ -56,6 +58,7 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
     _speech.stop();
     _titleController.dispose();
     _amountController.dispose();
+    _noteController.dispose();
     super.dispose();
   }
 
@@ -111,6 +114,7 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
         exchangeRate: provider.exchangeRate,
         date: _selectedDate,
         category: _selectedCategory,
+        note: _noteController.text,
       );
       final saved = isEditing
           ? await provider.updateExpense(expense)
@@ -241,6 +245,15 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
                         setState(() => _selectedCategory = value);
                       }
                     },
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextFormField(
+              controller: _noteController,
+              decoration: const InputDecoration(
+                labelText: 'Note (optional)',
+                hintText: 'Anything to remember',
+              ),
+              maxLines: 2,
             ),
             if (_submitError != null) ...[
               const SizedBox(height: AppSpacing.md),

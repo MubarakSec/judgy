@@ -190,6 +190,15 @@ class ExpenseTile extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
+                      if (expense.note != null && expense.note!.isNotEmpty) ...[
+                        const SizedBox(height: AppSpacing.xxs),
+                        Text(
+                          expense.note!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
                     ],
                   ),
                 ),
