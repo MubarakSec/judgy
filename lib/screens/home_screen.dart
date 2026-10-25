@@ -9,6 +9,7 @@ import '../widgets/total_spent_card.dart';
 import '../utils/currency_formatter.dart';
 import 'add_expense_sheet.dart';
 import 'settings_sheet.dart';
+import 'insights_sheet.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, this.openAddOnStart = false});
@@ -71,6 +72,17 @@ class _HomeScreenState extends State<HomeScreen> {
     ).showSnackBar(const SnackBar(content: Text('Settings saved.')));
   }
 
+  Future<void> _openInsights(BuildContext context) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      barrierLabel: 'Close insights',
+      builder: (_) => const InsightsSheet(),
+    );
+  }
+
   Future<void> _toggleCurrency(
     BuildContext context,
     ExpenseProvider provider,
@@ -123,6 +135,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   ? null
                   : () => _toggleCurrency(context, provider),
             ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.insights_outlined),
+            tooltip: 'Spending insights',
+            onPressed: () => _openInsights(context),
           ),
           IconButton(
             icon: const Icon(Icons.tune),

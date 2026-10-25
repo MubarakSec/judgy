@@ -95,6 +95,46 @@ class ExpenseProvider with ChangeNotifier {
 
   int get monthlyRemainingCents => _monthlyBudgetCents - monthlySpentCents;
 
+  Map<String, int> get categoryTotals {
+    final now = _clock();
+    final start = DateTime(now.year, now.month);
+    final totals = <String, int>{};
+    for (final expense in _expenses) {
+      if (expense.date.isBefore(start) || expense.date.isAfter(now)) continue;
+      totals.update(
+        expense.category,
+        (value) => value + expense.amountCents,
+        ifAbsent: () => expense.amountCents,
+      );
+    }
+    return totals;
+  }
+
+  int get previousMonthSpentCents {
+    final now = _clock();
+    final start = DateTime(now.year, now.month - 1);
+    final end = DateTime(now.year, now.month);
+    return _expenses
+        .where(
+          (expense) =>
+              !expense.date.isBefore(start) && expense.date.isBefore(end),
+        )
+        .fold(0, (total, expense) => total + expense.amountCents);
+  }
+
+  int get dailyAverageCents {
+    final now = _clock();
+    final day = now.day <= 0 ? 1 : now.day;
+    if (monthlySpentCents <= 0) return 0;
+    return (monthlySpentCents / day).round();
+  }
+
+  double get monthOverMonthChange {
+    if (previousMonthSpentCents <= 0) return 0;
+    return (monthlySpentCents - previousMonthSpentCents) /
+        previousMonthSpentCents;
+  }
+
   double get budgetProgress {
     if (_monthlyBudgetCents <= 0) return 0;
     return (monthlySpentCents / _monthlyBudgetCents).clamp(0.0, 1.0);
