@@ -6,9 +6,12 @@ adds accountability without requiring an account or a network connection.
 
 ## Features
 
-- Add categorized expenses and filter them by day, week, or month.
+- Add categorized expenses and filter them by day, week, month, or custom range.
 - Track current-month spending against a configurable monthly budget.
 - Display totals in USD or YER with a user-managed exchange rate.
+- Sort, search, duplicate, and annotate expenses.
+- Recurring expense templates with optional auto-apply.
+- Spending insights, monthly summaries, and CSV/JSON backup.
 - Keep expense data on the device using versioned local persistence.
 - Recover accidental deletions with Undo.
 

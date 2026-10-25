@@ -7,7 +7,10 @@
 - [x] Centralize categories (label, icon, quotes) in one registry; remove duplicates.
 - [x] Date picker + edit expense (backdated entries, edit flow).
 - [x] Release identity: applicationId/package name, signing config; update README (Android-only).
-- [ ] Storage abstraction: repository interface + move from SharedPreferences to SQLite/drift (before search/export).
+- [x] Search, sort, duplicate, notes, and CSV/JSON backup.
+- [x] Recurring expenses and budget alerts.
+- [x] Biometric lock and haptic feedback.
+- [ ] Storage abstraction: repository interface + move from SharedPreferences to SQLite/drift (before large-scale search/export).
 
 ## Medium
 - [x] Exchange rate upper bound validation.
