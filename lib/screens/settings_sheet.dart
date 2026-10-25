@@ -223,6 +223,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final provider = context.watch<ExpenseProvider>();
     return AppSheet(
       title: 'Budget & currency',
       subtitle: 'Set the rate used for conversions and your monthly target.',
@@ -358,6 +359,15 @@ class _SettingsSheetState extends State<SettingsSheet> {
               onPressed: _isSaving ? null : _saveBackupFile,
               icon: const Icon(Icons.save_outlined),
               label: const Text('Save backup file'),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Require biometric unlock'),
+              value: provider.requireBiometric,
+              onChanged: _isSaving
+                  ? null
+                  : (value) => provider.setRequireBiometric(value),
             ),
           ],
         ),

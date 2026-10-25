@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:local_auth/local_auth.dart';
 
 import '../providers/expense_provider.dart';
 import '../theme/app_theme.dart';
@@ -24,6 +25,9 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final LocalAuthentication _localAuth = LocalAuthentication();
+  bool _unlocked = true;
+  bool _authenticating = false;
   String _searchQuery = '';
   String _sortMode = 'Date';
 
@@ -36,10 +40,33 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    final provider = context.read<ExpenseProvider>();
+    if (provider.requireBiometric) {
+      _unlocked = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _authenticate());
+    }
     if (widget.openAddOnStart) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _openAddExpense(context);
       });
+    }
+  }
+
+  Future<void> _authenticate() async {
+    if (_authenticating) return;
+    setState(() => _authenticating = true);
+    try {
+      final ok = await _localAuth.authenticate(
+        localizedReason: 'Unlock Judgy',
+      );
+      if (mounted) {
+        setState(() {
+          _unlocked = ok;
+          _authenticating = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _authenticating = false);
     }
   }
 
@@ -116,6 +143,17 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<ExpenseProvider>();
+    if (provider.requireBiometric && !_unlocked) {
+      return Scaffold(
+        body: Center(
+          child: FilledButton.icon(
+            onPressed: _authenticating ? null : _authenticate,
+            icon: const Icon(Icons.lock_outline),
+            label: Text(_authenticating ? 'Unlocking…' : 'Unlock Judgy'),
+          ),
+        ),
+      );
+    }
     final filtered = provider.filteredExpenses;
     final query = _searchQuery.trim().toLowerCase();
     final visibleExpenses = query.isEmpty

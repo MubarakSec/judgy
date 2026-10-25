@@ -50,12 +50,14 @@ class ExpenseProvider with ChangeNotifier {
   bool _loadFailed = false;
   final List<RecurringExpense> _recurringExpenses = [];
   bool _autoApplyRecurring = false;
+  bool _requireBiometric = false;
   int _lastBudgetAlertLevel = 0;
   int _budgetAlertPeriod = 0;
 
   UnmodifiableListView<Expense> get expenses => UnmodifiableListView(_expenses);
   UnmodifiableListView<RecurringExpense> get recurringExpenses => UnmodifiableListView(_recurringExpenses);
   bool get autoApplyRecurring => _autoApplyRecurring;
+  bool get requireBiometric => _requireBiometric;
   DateTime get now => _clock();
   bool get isUSD => _isUSD;
   double get exchangeRate => _exchangeRate;
@@ -307,6 +309,7 @@ class ExpenseProvider with ChangeNotifier {
     _customRangeStart = null;
     _customRangeEnd = null;
     _autoApplyRecurring = false;
+    _requireBiometric = false;
     _lastBudgetAlertLevel = 0;
     _budgetAlertPeriod = _clock().year * 100 + _clock().month;
     _warningMessage = null;
@@ -327,6 +330,7 @@ class ExpenseProvider with ChangeNotifier {
       'customRangeEnd': _customRangeEnd?.toIso8601String(),
       'recurringExpenses': _recurringExpenses.map((item) => item.toMap()).toList(),
       'autoApplyRecurring': _autoApplyRecurring,
+      'requireBiometric': _requireBiometric,
       'lastBudgetAlertLevel': _lastBudgetAlertLevel,
       'budgetAlertPeriod': _budgetAlertPeriod,
       'expenses': _expenses.map((expense) => expense.toMap()).toList(),
@@ -367,6 +371,9 @@ class ExpenseProvider with ChangeNotifier {
       _autoApplyRecurring = state['autoApplyRecurring'] is bool
           ? state['autoApplyRecurring'] as bool
           : _autoApplyRecurring;
+      _requireBiometric = state['requireBiometric'] is bool
+          ? state['requireBiometric'] as bool
+          : _requireBiometric;
       _recurringExpenses
         ..clear()
         ..addAll(importedRecurring);
@@ -566,6 +573,23 @@ class ExpenseProvider with ChangeNotifier {
     }
   }
 
+  Future<bool> setRequireBiometric(bool value) {
+    _requireBiometric = value;
+    return _enqueue(() async {
+      _beginSaving();
+      try {
+        await _saveState();
+        return true;
+      } catch (_) {
+        _requireBiometric = !value;
+        _errorMessage = 'Security setting could not be saved.';
+        return false;
+      } finally {
+        _finishSaving();
+      }
+    });
+  }
+
   Future<bool> _commit({
     required VoidCallback apply,
     required VoidCallback rollback,
@@ -674,6 +698,9 @@ class ExpenseProvider with ChangeNotifier {
     _autoApplyRecurring = state['autoApplyRecurring'] is bool
         ? state['autoApplyRecurring'] as bool
         : false;
+    _requireBiometric = state['requireBiometric'] is bool
+        ? state['requireBiometric'] as bool
+        : false;
 
     _expenses
       ..clear()
@@ -758,6 +785,7 @@ class ExpenseProvider with ChangeNotifier {
       'customRangeEnd': _customRangeEnd?.toIso8601String(),
       'recurringExpenses': _recurringExpenses.map((item) => item.toMap()).toList(),
       'autoApplyRecurring': _autoApplyRecurring,
+      'requireBiometric': _requireBiometric,
       'lastBudgetAlertLevel': _lastBudgetAlertLevel,
       'budgetAlertPeriod': _budgetAlertPeriod,
       'expenses': _expenses.map((expense) => expense.toMap()).toList(),
