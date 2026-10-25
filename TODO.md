@@ -4,7 +4,7 @@
 - [x] Corrupt/unsupported saved state must not be overwritten; track load failure and block writes or back up raw JSON; add test.
 
 ## High
-- [ ] Centralize categories (label, icon, quotes) in one registry; remove duplicates.
+- [x] Centralize categories (label, icon, quotes) in one registry; remove duplicates.
 - [ ] Date picker + edit expense (backdated entries, edit flow).
 - [ ] Release identity: applicationId/package name, signing config; update README (Android-only).
 - [ ] Storage abstraction: repository interface + move from SharedPreferences to SQLite/drift (before search/export).

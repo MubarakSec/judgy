@@ -6,6 +6,7 @@ import '../models/expense.dart';
 import '../providers/expense_provider.dart';
 import '../theme/app_theme.dart';
 import '../utils/currency_formatter.dart';
+import '../utils/expense_categories.dart';
 import '../utils/judgy_quotes.dart';
 import '../widgets/app_sheet.dart';
 
@@ -17,18 +18,10 @@ class AddExpenseSheet extends StatefulWidget {
 }
 
 class _AddExpenseSheetState extends State<AddExpenseSheet> {
-  static const _categories = [
-    'Coffee',
-    'Food',
-    'Shopping',
-    'Subscriptions',
-    'Other',
-  ];
-
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _amountController = TextEditingController();
-  String _selectedCategory = _categories.first;
+  String _selectedCategory = ExpenseCategory.labels.first;
   String? _submitError;
   bool _isSubmitting = false;
 
@@ -144,7 +137,7 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
               isExpanded: true,
               dropdownColor: AppColors.surfaceElevated,
               decoration: const InputDecoration(labelText: 'Category'),
-              items: _categories
+              items: ExpenseCategory.labels
                   .map(
                     (category) => DropdownMenuItem(
                       value: category,

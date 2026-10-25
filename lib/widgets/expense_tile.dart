@@ -5,6 +5,7 @@ import '../models/expense.dart';
 import '../providers/expense_provider.dart';
 import '../theme/app_theme.dart';
 import '../utils/currency_formatter.dart';
+import '../utils/expense_categories.dart';
 
 enum _ExpenseAction { delete }
 
@@ -13,15 +14,7 @@ class ExpenseTile extends StatelessWidget {
 
   final Expense expense;
 
-  IconData _categoryIcon(String category) {
-    return switch (category) {
-      'Coffee' => Icons.coffee_outlined,
-      'Food' => Icons.restaurant_outlined,
-      'Shopping' => Icons.shopping_bag_outlined,
-      'Subscriptions' => Icons.subscriptions_outlined,
-      _ => Icons.receipt_long_outlined,
-    };
-  }
+  IconData _categoryIcon(String category) => ExpenseCategory.iconFor(category);
 
   Future<void> _delete(BuildContext context, ExpenseProvider provider) async {
     final messenger = ScaffoldMessenger.of(context);
