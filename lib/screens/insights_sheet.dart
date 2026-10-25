@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/expense_provider.dart';
@@ -99,6 +100,34 @@ class InsightsSheet extends StatelessWidget {
                 ),
               );
             }),
+          const SizedBox(height: AppSpacing.lg),
+          FilledButton.icon(
+            onPressed: () {
+              final provider = context.read<ExpenseProvider>();
+              String currency(int cents) => CurrencyFormatter.displayFromUsdCents(
+                    usdCents: cents,
+                    isUsd: provider.isUSD,
+                    exchangeRate: provider.exchangeRate,
+                  );
+              final buffer = StringBuffer();
+              buffer.writeln('Judgy monthly summary');
+              buffer.writeln('This month: ${currency(provider.monthlySpentCents)}');
+              buffer.writeln('Previous month: ${currency(provider.previousMonthSpentCents)}');
+              buffer.writeln('Daily average: ${currency(provider.dailyAverageCents)}');
+              buffer.writeln('Categories:');
+              provider.categoryTotals.entries.toList()
+                ..sort((a, b) => b.value.compareTo(a.value))
+                ..forEach((entry) {
+                  buffer.writeln('  ${entry.key}: ${currency(entry.value)}');
+                });
+              Clipboard.setData(ClipboardData(text: buffer.toString()));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Monthly summary copied.')),
+              );
+            },
+            icon: const Icon(Icons.copy_all_outlined),
+            label: const Text('Copy monthly summary'),
+          ),
           const SizedBox(height: AppSpacing.lg),
         ],
       ),
