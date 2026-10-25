@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/expense.dart';
+import '../utils/expense_csv.dart';
 import '../services/quick_add_notifications.dart';
 
 class ExpenseRemoval {
@@ -336,6 +337,39 @@ class ExpenseProvider with ChangeNotifier {
     } catch (_) {
       // Alert state is best-effort; spending data remains saved.
     }
+  }
+
+  String exportCsv() {
+    return ExpenseCsv.encode(_expenses.map((expense) => expense.toMap()).toList());
+  }
+
+  Future<bool> importCsv(String source) {
+    return _enqueue(() async {
+      final rows = ExpenseCsv.decode(source);
+      final imported = <Expense>[];
+      for (final row in rows) {
+        imported.add(Expense.fromMap(Map<String, dynamic>.from(row)));
+      }
+
+      _expenses
+        ..clear()
+        ..addAll(imported);
+      _expenses.sort((a, b) => b.date.compareTo(a.date));
+      _loadFailed = false;
+      _errorMessage = null;
+
+      _beginSaving();
+      try {
+        await _saveState();
+        return true;
+      } finally {
+        _finishSaving();
+      }
+    }).catchError((_) {
+      _errorMessage = 'CSV could not be imported. Check the file and try again.';
+      notifyListeners();
+      return false;
+    });
   }
 
   Future<bool> _commit({

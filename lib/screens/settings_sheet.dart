@@ -98,6 +98,60 @@ class _SettingsSheetState extends State<SettingsSheet> {
     }
   }
 
+  Future<void> _copyCsv() async {
+    final csv = context.read<ExpenseProvider>().exportCsv();
+    await Clipboard.setData(ClipboardData(text: csv));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('CSV copied to clipboard.')),
+    );
+  }
+
+  Future<void> _importCsv() async {
+    final controller = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Import CSV'),
+          content: TextField(
+            controller: controller,
+            minLines: 4,
+            maxLines: 8,
+            decoration: const InputDecoration(hintText: 'Paste CSV here'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Import'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() {
+      _isSaving = true;
+      _saveError = null;
+    });
+    final provider = context.read<ExpenseProvider>();
+    final saved = await provider.importCsv(controller.text);
+    if (!mounted) return;
+    if (saved) {
+      Navigator.of(context).pop(true);
+    } else {
+      setState(() {
+        _saveError = provider.errorMessage ?? 'CSV could not be imported.';
+        _isSaving = false;
+      });
+    }
+  }
+
   Future<void> _save() async {
     if (_isSaving || !_formKey.currentState!.validate()) return;
 
@@ -225,6 +279,26 @@ class _SettingsSheetState extends State<SettingsSheet> {
                     onPressed: _isSaving ? null : _restoreBackup,
                     icon: const Icon(Icons.restore_outlined),
                     label: const Text('Restore'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _isSaving ? null : _copyCsv,
+                    icon: const Icon(Icons.table_chart_outlined),
+                    label: const Text('Copy CSV'),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _isSaving ? null : _importCsv,
+                    icon: const Icon(Icons.upload_file_outlined),
+                    label: const Text('Import CSV'),
                   ),
                 ),
               ],
