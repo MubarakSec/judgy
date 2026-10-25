@@ -122,6 +122,7 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
       if (!mounted) return;
 
       if (saved) {
+        HapticFeedback.lightImpact();
         if (isEditing) {
           Navigator.of(context).pop(true);
         } else {

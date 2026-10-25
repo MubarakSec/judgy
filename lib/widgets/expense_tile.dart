@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../models/expense.dart';
@@ -34,6 +35,7 @@ class ExpenseTile extends StatelessWidget {
       return;
     }
 
+    HapticFeedback.lightImpact();
     messenger.showSnackBar(
       SnackBar(
         content: Text('${expense.title} deleted'),
