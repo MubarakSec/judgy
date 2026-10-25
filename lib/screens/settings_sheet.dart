@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'dart:io';
 import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/expense_provider.dart';
@@ -182,6 +184,18 @@ class _SettingsSheetState extends State<SettingsSheet> {
     Navigator.of(context).pop(true);
   }
 
+  Future<void> _saveBackupFile() async {
+    final provider = context.read<ExpenseProvider>();
+    final directory = await getApplicationDocumentsDirectory();
+    final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
+    final file = File('${directory.path}/judgy-backup-$timestamp.json');
+    await file.writeAsString(provider.exportState());
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Backup saved: ${file.path}')),
+    );
+  }
+
   Future<void> _save() async {
     if (_isSaving || !_formKey.currentState!.validate()) return;
 
@@ -338,6 +352,12 @@ class _SettingsSheetState extends State<SettingsSheet> {
               onPressed: _isSaving ? null : _resetAll,
               icon: const Icon(Icons.delete_forever_outlined),
               label: const Text('Reset all data'),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            OutlinedButton.icon(
+              onPressed: _isSaving ? null : _saveBackupFile,
+              icon: const Icon(Icons.save_outlined),
+              label: const Text('Save backup file'),
             ),
           ],
         ),
