@@ -1,60 +1,71 @@
-# Judgy Full Review
+# Judgy upgrade review — 25 October 2026
 
-Personal-tool assessment: Judgy is already a solid local-first expense tracker.
-The core money math, versioned persistence, corrupt-state protection, and
-accessibility work are in good shape. The changes below focus on making it
-safer and more useful day to day without turning it into a bloated app.
+The upgrade follows the initial source review. `git pull --ff-only` first advanced
+main from `9f36798` to `e6adcce`; that upstream change already corrected the Android
+namespace and enabled notification desugaring.
 
-## Strengths
+## Delivered
 
-- Money is stored in integer cents, including original YER entry metadata.
-- State is versioned and corrupt/unsupported state is not overwritten.
-- Undo after delete is implemented well.
-- Filtering, monthly budget math, and semantics are tested.
-- Android cloud backup is disabled.
-- Voice quick-add and persistent quick-add notification exist.
+- Moved sort into the search field, added clear-search, grouped secondary actions,
+  and made the home content scroll together for short screens and large text.
+- Added a voice transcript/review step, installed-language selection, explicit
+  entry currency, Arabic/English number words, today/yesterday, and category hints.
+  Ambiguous amounts/currencies and unsupported income/refund commands are blocked.
+- Kept speech callbacks in a persistent controller; handled errors, cancellation,
+  initialization races, late results, and backgrounding. On-device mode checks
+  native capability before listening; online recognition requires an explicit choice.
+- Introduced a repository and a versioned state model. Production uses SQLite;
+  existing preferences migrate only after complete validation. Record updates,
+  settings, recurring markers, and import recovery are transactional.
+- Validated imports before replacing anything. Missing lists, malformed records,
+  duplicate IDs, empty CSV, and malformed quoting are rejected. A failed write
+  leaves both the visible state and persistent state unchanged.
+- Made recurring application atomic and idempotent per template/month; fixed
+  short-month scheduling and validated recurring forms. Current-month due entries
+  are reconciled on launch, resume, enabling auto-apply, and template creation.
+- Preserved original money metadata when editing notes or titles. Duplicates use
+  today's date. CSV keeps notes and escapes formula-like spreadsheet cells.
+- Added file export/restore with replacement previews, pre-import recovery,
+  and seven app-private daily snapshots. Reset persists an empty current state,
+  clears legacy preference data in production, and removes recovery/snapshot copies.
+- Added a lock gate around the Navigator, including sheets/dialogs, with settings
+  loading protection and deferred notification navigation. The Android host now
+  uses FlutterFragmentActivity and AppCompat themes. Device lock is preserved
+  when importing backups.
+- Added warm-app notification routing and a separate high-importance budget-alert
+  channel. Notification failures cannot make a committed expense appear unsaved.
+- Removed debug-signing fallback for releases and added a release-signing check.
+- Narrowed expense-row subscriptions to currency changes and corrected insight
+  comparisons to use the same elapsed period in the previous month.
 
-## Implemented in this review
+## Validation
 
-- Reduced Gradle heap from 8 GB to 512 MB to respect low-RAM machines.
-- Request Android notification permission before showing the quick-add notification.
-- Replaced timestamp-based expense IDs with UUIDs.
-- Added in-app search by title, category, and displayed amount.
-- Added clipboard backup and restore in Settings.
-- Kept `flutter analyze` and `flutter test` green.
+- `flutter analyze --no-pub`: **no issues found**.
+- `flutter test --no-pub --concurrency=1`: **60 tests passed**.
+- SQLite tests cover migration/reopening and an injected failure after row changes,
+  verifying rollback of both the expense and recurring marker.
+- Widget tests cover delayed lock settings, backgrounding with an unsaved sheet,
+  deferred quick-add, search/sort, voice confirmation/currency, note-only edits,
+  grouped settings, and a 360 × 640 screen with large text and keyboard insets.
+- Screens were rendered locally for visual inspection; this caught a Material
+  surface issue in the shared sheet and was followed by a regression test.
+- No APK, Gradle build, emulator, or device integration test was run on the VPS.
 
-## Recommended next (highest value for a personal tool)
+## Practical limits and next work
 
-### P0 - Harden
+Voice is deterministic entry assistance, not unrestricted natural-language AI.
+Number words cover common Arabic/English forms; actual recognition and dialect
+accuracy depend on the device and its language packs. Strict on-device recognition
+requires Android 12+ and an available native on-device recognizer. Income,
+refunds, and per-person balances require a separate product/data-model decision.
 
-- Add a real release signing config using a local `key.properties` file; never commit keys.
-- Encrypt local storage or move to SQLCipher/encrypted drift if the device is shared.
-- Make writes atomic (write temp + rename) or move to SQLite to avoid partial JSON corruption.
-- Add an automatic daily/weekly backup file in app documents plus a "last backup" timestamp.
-- Handle Android 13+ notification permission denial gracefully and re-prompt from Settings.
+Native speech, offline language availability, biometrics/device credentials,
+notification delivery, file selectors, sharing, and release signing still need a
+real Android device and eventual build validation on a stronger runner.
 
-### P1 - Make daily use easier
-
-- Add recurring expenses (rent, subscriptions, salary) with one-tap confirm.
-- Add CSV export/import and a monthly summary export for budgeting.
-- Add category and date-range filters, plus "last 30 days" and "custom range".
-- Add budget alerts when crossing 80%, 100%, and 120% of the monthly budget.
-- Add spending insights: top categories, daily average, month-over-month change.
-- Add a home-screen widget or quick-settings tile for one-tap expense entry.
-- Let categories be renamed, reordered, and extended without code changes.
-- Support multiple currencies beyond USD/YER, or at least a second "travel" currency.
-
-### P2 - Quality and maintainability
-
-- Introduce a repository interface and move persistence to drift/SQLite before adding search/export at scale.
-- Add golden/widget tests for settings, editing, and voice parsing.
-- Add crash-safe migration tests for future schema versions.
-- Keep the notification channel and speech locale configurable instead of hardcoded.
-- Add a light theme and respect system theme preference.
-
-## Suggested first milestone
-
-1. Release signing + backup file.
-2. Recurring expenses + budget alerts.
-3. SQLite/drift migration behind the repository interface.
-4. CSV export and monthly summary.
+SQLite and local snapshots are not application-encrypted, and local copies do
+not protect against uninstall or device loss. Export outside the app for that.
+The app still loads history into memory; database transactions improve safety,
+while very large histories would benefit from paginated queries. Full Arabic UI
+localization, configurable category management, and a light theme remain separate
+product enhancements.

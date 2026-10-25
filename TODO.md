@@ -10,7 +10,7 @@
 - [x] Search, sort, duplicate, notes, and CSV/JSON backup.
 - [x] Recurring expenses and budget alerts.
 - [x] Biometric lock and haptic feedback.
-- [ ] Storage abstraction: repository interface + move from SharedPreferences to SQLite/drift (before large-scale search/export).
+- [x] Storage abstraction and transactional SQLite migration, with import recovery and daily snapshots.
 
 ## Medium
 - [x] Exchange rate upper bound validation.
@@ -26,3 +26,12 @@
 ## Done
 - [x] Install deps and toolchain; analyze/test green.
 - [x] Render UI screenshots into gitignored `refrences/`.
+
+## Upgrade validation
+- [x] Search-integrated sorting and scrollable compact home layout.
+- [x] Arabic/English voice number words, explicit currency, transcript review, and recognizer lifecycle.
+- [x] Strict on-device capability check; optional online speech is disclosed.
+- [x] Import validation, atomic recurring application, reset protection, and CSV note preservation.
+- [x] Device lock gates loading, sheets, dialogs, and quick-add navigation.
+- [ ] Real Android device pass: recognition/dialects, offline packs, unlock, file/share pickers, notifications.
+- [ ] Full Arabic UI localization, configurable category management, and a light theme.
