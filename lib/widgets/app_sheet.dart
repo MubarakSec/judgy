@@ -26,12 +26,11 @@ class AppSheet extends StatelessWidget {
       padding: EdgeInsets.only(bottom: keyboardInset),
       child: Align(
         alignment: Alignment.bottomCenter,
-        child: DecoratedBox(
-          decoration: const BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.vertical(
-              top: Radius.circular(AppRadii.sheet),
-            ),
+        child: Material(
+          color: AppColors.surface,
+          clipBehavior: Clip.antiAlias,
+          borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(AppRadii.sheet),
           ),
           child: SafeArea(
             top: false,

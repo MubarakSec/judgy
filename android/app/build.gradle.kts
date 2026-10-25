@@ -50,7 +50,7 @@ android {
             signingConfig = if (keystorePropertiesFile.exists()) {
                 signingConfigs.getByName("release")
             } else {
-                signingConfigs.getByName("debug")
+                null
             }
         }
     }
@@ -68,4 +68,18 @@ flutter {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+}
+
+// Keep debug builds usable while refusing distributable releases without keys.
+val verifyReleaseSigning by tasks.registering {
+    doLast {
+        check(keystorePropertiesFile.exists()) {
+            "Release signing is not configured. Create android/key.properties using key.properties.example."
+        }
+    }
+}
+tasks.matching {
+    it.name == "packageRelease" || it.name == "bundleRelease" || it.name == "assembleRelease"
+}.configureEach {
+    dependsOn(verifyReleaseSigning)
 }

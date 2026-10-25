@@ -1,826 +1,504 @@
 import 'dart:async';
 import 'dart:collection';
-import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/expense.dart';
+import '../models/expense_state.dart';
 import '../models/recurring_expense.dart';
-import '../utils/expense_csv.dart';
+import '../repositories/expense_repository.dart';
 import '../services/quick_add_notifications.dart';
+import '../utils/expense_csv.dart';
 
 class ExpenseRemoval {
   const ExpenseRemoval({required this.expense, required this.index});
-
   final Expense expense;
   final int index;
 }
 
 class ExpenseProvider with ChangeNotifier {
-  static const _stateKey = 'judgy_state_v2';
-  static const _stateVersion = 2;
-  static const _validFilters = {'Day', 'Week', 'Month', 'Custom'};
-  static const _defaultExchangeRate = 540.0;
-  static const _maxExchangeRate = 1000000.0;
-  static const _defaultBudgetCents = 50000;
-  static const _maxSafeJsonInteger = 9007199254740991;
-
-  ExpenseProvider({DateTime Function()? clock})
-    : _clock = clock ?? DateTime.now {
+  ExpenseProvider({
+    DateTime Function()? clock,
+    ExpenseRepository? repository,
+    Future<void> Function(int)? budgetAlert,
+  }) : _clock = clock ?? DateTime.now,
+       _repository = repository ?? PreferencesExpenseRepository(),
+       _budgetAlert =
+           budgetAlert ??
+           ((level) => QuickAddNotifications.showBudgetAlert(
+             percentage: level,
+             overBudget: level >= 100,
+           )) {
     _initialized = _loadData();
   }
 
   final DateTime Function() _clock;
-  final List<Expense> _expenses = [];
-  Future<void> _mutationQueue = Future<void>.value();
+  final ExpenseRepository _repository;
+  final Future<void> Function(int) _budgetAlert;
+  ExpenseState _state = const ExpenseState();
   late final Future<void> _initialized;
-  SharedPreferences? _preferences;
-
-  bool _isUSD = true;
-  double _exchangeRate = _defaultExchangeRate;
-  int _monthlyBudgetCents = _defaultBudgetCents;
+  Future<void> _queue = Future.value();
+  bool _disposed = false;
+  bool _isLoading = true;
+  bool _isSaving = false;
+  bool _loadFailed = false;
+  String? _warningMessage;
+  String? _errorMessage;
   String _timeFilter = 'Month';
   DateTime? _customRangeStart;
   DateTime? _customRangeEnd;
-  bool _isLoading = true;
-  bool _isSaving = false;
-  String? _warningMessage;
-  String? _errorMessage;
-  bool _loadFailed = false;
-  final List<RecurringExpense> _recurringExpenses = [];
-  bool _autoApplyRecurring = false;
-  bool _requireBiometric = false;
-  int _lastBudgetAlertLevel = 0;
-  int _budgetAlertPeriod = 0;
 
-  UnmodifiableListView<Expense> get expenses => UnmodifiableListView(_expenses);
-  UnmodifiableListView<RecurringExpense> get recurringExpenses => UnmodifiableListView(_recurringExpenses);
-  bool get autoApplyRecurring => _autoApplyRecurring;
-  bool get requireBiometric => _requireBiometric;
+  UnmodifiableListView<Expense> get expenses =>
+      UnmodifiableListView(_state.expenses);
+  UnmodifiableListView<RecurringExpense> get recurringExpenses =>
+      UnmodifiableListView(_state.recurring);
+  bool get autoApplyRecurring => _state.autoApplyRecurring;
+  bool get requireBiometric => _state.requireBiometric;
+  String get voiceLocale => _state.voiceLocale;
+  bool get voiceOnDevice => _state.voiceOnDevice;
   DateTime get now => _clock();
-  bool get isUSD => _isUSD;
-  double get exchangeRate => _exchangeRate;
-  int get monthlyBudgetCents => _monthlyBudgetCents;
-  double get monthlyBudget => _monthlyBudgetCents / 100;
+  bool get isUSD => _state.isUSD;
+  double get exchangeRate => _state.exchangeRate;
+  int get monthlyBudgetCents => _state.budgetCents;
+  double get monthlyBudget => monthlyBudgetCents / 100;
   String get timeFilter => _timeFilter;
   DateTime? get customRangeStart => _customRangeStart;
   DateTime? get customRangeEnd => _customRangeEnd;
   bool get isLoading => _isLoading;
   bool get isSaving => _isSaving;
+  bool get loadFailed => _loadFailed;
   String? get warningMessage => _warningMessage;
   String? get errorMessage => _errorMessage;
-  bool get loadFailed => _loadFailed;
-  int get lastBudgetAlertLevel => _lastBudgetAlertLevel;
+  int get lastBudgetAlertLevel => _state.lastBudgetAlertLevel;
   Future<void> get initialized => _initialized;
 
   List<Expense> get filteredExpenses {
-    final now = _clock();
+    final current = now;
     final start = switch (_timeFilter) {
-      'Day' => _startOfDay(now),
-      'Week' => _startOfWeek(now),
-      'Custom' => _customRangeStart ?? _startOfDay(now),
-      _ => DateTime(now.year, now.month),
+      'Day' => _startOfDay(current),
+      'Week' => _startOfDay(
+        current,
+      ).subtract(Duration(days: current.weekday - 1)),
+      'Custom' => _customRangeStart ?? _startOfDay(current),
+      _ => DateTime(current.year, current.month),
     };
-    final end = _timeFilter == 'Custom'
-        ? (_customRangeEnd ?? now)
-        : now;
-
-    return _expenses
-        .where(
-          (expense) =>
-              !expense.date.isBefore(start) && !expense.date.isAfter(end),
-        )
-        .toList(growable: false);
+    final end = _timeFilter == 'Custom' ? _customRangeEnd ?? current : current;
+    return _state.expenses
+        .where((e) => !e.date.isBefore(start) && !e.date.isAfter(end))
+        .toList();
   }
 
   int get totalSpentCents =>
-      filteredExpenses.fold(0, (total, expense) => total + expense.amountCents);
-
-  int get monthlySpentCents {
-    final now = _clock();
-    final start = DateTime(now.year, now.month);
-    return _expenses
-        .where(
-          (expense) =>
-              !expense.date.isBefore(start) && !expense.date.isAfter(now),
-        )
-        .fold(0, (total, expense) => total + expense.amountCents);
+      filteredExpenses.fold(0, (sum, e) => sum + e.amountCents);
+  int _monthlyTotal(ExpenseState state) {
+    final current = now;
+    final start = DateTime(current.year, current.month);
+    return state.expenses
+        .where((e) => !e.date.isBefore(start) && !e.date.isAfter(current))
+        .fold(0, (sum, e) => sum + e.amountCents);
   }
 
-  int get monthlyRemainingCents => _monthlyBudgetCents - monthlySpentCents;
-
+  int get monthlySpentCents => _monthlyTotal(_state);
+  int get monthlyRemainingCents => monthlyBudgetCents - monthlySpentCents;
+  double get budgetProgress => monthlyBudgetCents <= 0
+      ? 0
+      : (monthlySpentCents / monthlyBudgetCents).clamp(0.0, 1.0);
+  bool get isOverBudget =>
+      monthlyBudgetCents > 0 && monthlySpentCents > monthlyBudgetCents;
   Map<String, int> get categoryTotals {
-    final now = _clock();
     final start = DateTime(now.year, now.month);
     final totals = <String, int>{};
-    for (final expense in _expenses) {
-      if (expense.date.isBefore(start) || expense.date.isAfter(now)) continue;
+    for (final e in _state.expenses) {
+      if (e.date.isBefore(start) || e.date.isAfter(now)) continue;
       totals.update(
-        expense.category,
-        (value) => value + expense.amountCents,
-        ifAbsent: () => expense.amountCents,
+        e.category,
+        (value) => value + e.amountCents,
+        ifAbsent: () => e.amountCents,
       );
     }
     return totals;
   }
 
   int get previousMonthSpentCents {
-    final now = _clock();
     final start = DateTime(now.year, now.month - 1);
     final end = DateTime(now.year, now.month);
-    return _expenses
-        .where(
-          (expense) =>
-              !expense.date.isBefore(start) && expense.date.isBefore(end),
-        )
-        .fold(0, (total, expense) => total + expense.amountCents);
+    return _state.expenses
+        .where((e) => !e.date.isBefore(start) && e.date.isBefore(end))
+        .fold(0, (sum, e) => sum + e.amountCents);
   }
 
-  int get dailyAverageCents {
-    final now = _clock();
-    final day = now.day <= 0 ? 1 : now.day;
-    if (monthlySpentCents <= 0) return 0;
-    return (monthlySpentCents / day).round();
+  int get previousComparableSpentCents {
+    final current = now;
+    final days = DateTime(current.year, current.month, 0).day;
+    final end = DateTime(
+      current.year,
+      current.month - 1,
+      current.day.clamp(1, days),
+      current.hour,
+      current.minute,
+      current.second,
+      current.millisecond,
+      current.microsecond,
+    );
+    final start = DateTime(current.year, current.month - 1);
+    return _state.expenses
+        .where((e) => !e.date.isBefore(start) && !e.date.isAfter(end))
+        .fold(0, (sum, e) => sum + e.amountCents);
   }
 
-  double get monthOverMonthChange {
-    if (previousMonthSpentCents <= 0) return 0;
-    return (monthlySpentCents - previousMonthSpentCents) /
-        previousMonthSpentCents;
-  }
-
-  double get budgetProgress {
-    if (_monthlyBudgetCents <= 0) return 0;
-    return (monthlySpentCents / _monthlyBudgetCents).clamp(0.0, 1.0);
-  }
-
-  bool get isOverBudget => monthlySpentCents > _monthlyBudgetCents;
+  int get dailyAverageCents => (monthlySpentCents / now.day).round();
+  double get monthOverMonthChange => previousComparableSpentCents == 0
+      ? double.nan
+      : (monthlySpentCents - previousComparableSpentCents) /
+            previousComparableSpentCents;
 
   void setTimeFilter(String filter) {
-    if (!_validFilters.contains(filter) || _timeFilter == filter) return;
+    if (!{'Day', 'Week', 'Month', 'Custom'}.contains(filter)) return;
     _timeFilter = filter;
-    notifyListeners();
+    _notify();
   }
 
   void setCustomRange(DateTime start, DateTime end) {
+    if (end.isBefore(start)) return;
     _customRangeStart = _startOfDay(start);
-    _customRangeEnd = _startOfDay(end).add(const Duration(days: 1)).subtract(const Duration(seconds: 1));
+    _customRangeEnd = DateTime(
+      end.year,
+      end.month,
+      end.day + 1,
+    ).subtract(const Duration(microseconds: 1));
     _timeFilter = 'Custom';
-    notifyListeners();
-  }
-
-  Future<bool> toggleCurrency() {
-    return _commit(
-      apply: () => _isUSD = !_isUSD,
-      rollback: () => _isUSD = !_isUSD,
-      failureMessage: 'Currency preference could not be saved.',
-    );
-  }
-
-  Future<bool> updateSettings(double rate, double budget) async {
-    if (!rate.isFinite || rate <= 0 || rate > _maxExchangeRate || !budget.isFinite || budget < 0) {
-      _setError('Enter a valid exchange rate and a budget of zero or more.');
-      return Future.value(false);
-    }
-
-    if (budget > _maxSafeJsonInteger / 100) {
-      _setError('That budget is too large to store safely.');
-      return Future.value(false);
-    }
-    final budgetCents = (budget * 100).round();
-
-    final previousRate = _exchangeRate;
-    final previousBudget = _monthlyBudgetCents;
-    final saved = await _commit(
-      apply: () {
-        _exchangeRate = rate;
-        _monthlyBudgetCents = budgetCents;
-      },
-      rollback: () {
-        _exchangeRate = previousRate;
-        _monthlyBudgetCents = previousBudget;
-      },
-      failureMessage:
-          'Settings could not be saved. Your previous values remain.',
-    );
-    if (saved) await _maybeBudgetAlert();
-    return saved;
-  }
-
-  Future<bool> addExpense(Expense expense) async {
-    final saved = await _commit(
-      apply: () {
-        _expenses.add(expense);
-        _expenses.sort((a, b) => b.date.compareTo(a.date));
-      },
-      rollback: () => _expenses.removeWhere((item) => item.id == expense.id),
-      failureMessage: 'Expense could not be saved. Please try again.',
-    );
-    if (saved) await _maybeBudgetAlert();
-    return saved;
-  }
-
-  Future<bool> updateExpense(Expense updated) async {
-    final previous = _expenses
-        .where((expense) => expense.id == updated.id)
-        .cast<Expense?>()
-        .firstOrNull;
-    if (previous == null) return Future.value(false);
-
-    final saved = await _commit(
-      apply: () {
-        _expenses.removeWhere((expense) => expense.id == updated.id);
-        _expenses.add(updated);
-        _expenses.sort((a, b) => b.date.compareTo(a.date));
-      },
-      rollback: () {
-        _expenses.removeWhere((expense) => expense.id == updated.id);
-        _expenses.add(previous);
-        _expenses.sort((a, b) => b.date.compareTo(a.date));
-      },
-      failureMessage: 'Expense could not be updated. Please try again.',
-    );
-    if (saved) await _maybeBudgetAlert();
-    return saved;
-  }
-
-  Future<ExpenseRemoval?> removeExpense(String id) {
-    return _enqueue(() async {
-      final index = _expenses.indexWhere((expense) => expense.id == id);
-      if (index < 0) return null;
-
-      final removal = ExpenseRemoval(
-        expense: _expenses.removeAt(index),
-        index: index,
-      );
-      _beginSaving();
-      try {
-        await _saveState();
-        return removal;
-      } catch (_) {
-        _expenses.insert(index.clamp(0, _expenses.length), removal.expense);
-        _errorMessage = 'Expense could not be deleted. It has been restored.';
-        return null;
-      } finally {
-        _finishSaving();
-      }
-    });
-  }
-
-  Future<bool> restoreExpense(ExpenseRemoval removal) {
-    if (_expenses.any((expense) => expense.id == removal.expense.id)) {
-      return Future.value(true);
-    }
-
-    var insertionIndex = 0;
-    return _commit(
-      apply: () {
-        insertionIndex = removal.index.clamp(0, _expenses.length);
-        _expenses.insert(insertionIndex, removal.expense);
-      },
-      rollback: () =>
-          _expenses.removeWhere((item) => item.id == removal.expense.id),
-      failureMessage: 'Expense could not be restored.',
-    );
+    _notify();
   }
 
   void clearWarning() {
-    if (_warningMessage == null) return;
     _warningMessage = null;
-    notifyListeners();
+    _notify();
   }
 
   void clearError() {
-    if (_errorMessage == null) return;
     _errorMessage = null;
-    notifyListeners();
+    _notify();
   }
 
-  /// Explicitly discards the unreadable saved state so writes can resume.
-  Future<void> resetStorage() async {
-    _loadFailed = false;
-    _expenses.clear();
-    _recurringExpenses.clear();
-    _isUSD = true;
-    _exchangeRate = _defaultExchangeRate;
-    _monthlyBudgetCents = _defaultBudgetCents;
-    _timeFilter = 'Month';
-    _customRangeStart = null;
-    _customRangeEnd = null;
-    _autoApplyRecurring = false;
-    _requireBiometric = false;
-    _lastBudgetAlertLevel = 0;
-    _budgetAlertPeriod = _clock().year * 100 + _clock().month;
-    _warningMessage = null;
-    _errorMessage = null;
-    final preferences = _preferences ?? await SharedPreferences.getInstance();
-    _preferences = preferences;
-    await preferences.remove(_stateKey);
-    notifyListeners();
-  }
-
-  String exportState() {
-    return jsonEncode(<String, dynamic>{
-      'version': _stateVersion,
-      'isUSD': _isUSD,
-      'exchangeRate': _exchangeRate,
-      'monthlyBudgetCents': _monthlyBudgetCents,
-      'customRangeStart': _customRangeStart?.toIso8601String(),
-      'customRangeEnd': _customRangeEnd?.toIso8601String(),
-      'recurringExpenses': _recurringExpenses.map((item) => item.toMap()).toList(),
-      'autoApplyRecurring': _autoApplyRecurring,
-      'requireBiometric': _requireBiometric,
-      'lastBudgetAlertLevel': _lastBudgetAlertLevel,
-      'budgetAlertPeriod': _budgetAlertPeriod,
-      'expenses': _expenses.map((expense) => expense.toMap()).toList(),
-    });
-  }
-
-  Future<bool> importState(String source) {
-    return _enqueue(() async {
-      final decoded = jsonDecode(source);
-      if (decoded is! Map) {
-        throw const FormatException('Backup must contain an object.');
-      }
-      final state = Map<String, dynamic>.from(decoded);
-      if (state['version'] != _stateVersion) {
-        throw const FormatException('Unsupported backup version.');
-      }
-
-      final isUSD = state['isUSD'] is bool ? state['isUSD'] as bool : _isUSD;
-      final exchangeRate = _validRate(state['exchangeRate']) ?? _exchangeRate;
-      final monthlyBudgetCents =
-          _validNonNegativeInteger(state['monthlyBudgetCents']) ??
-          _monthlyBudgetCents;
-      final currentPeriod = _clock().year * 100 + _clock().month;
-      _lastBudgetAlertLevel =
-          _validNonNegativeInteger(state['lastBudgetAlertLevel'])?.toInt() ?? 0;
-      _budgetAlertPeriod =
-          _validNonNegativeInteger(state['budgetAlertPeriod'])?.toInt() ?? currentPeriod;
-      if (_budgetAlertPeriod != currentPeriod) {
-        _lastBudgetAlertLevel = 0;
-        _budgetAlertPeriod = currentPeriod;
-      }
-      final importedExpenses = _parseExpenseRows(state['expenses']).toList();
-      final importedRecurring = _parseRecurringRows(state['recurringExpenses']).toList();
-      final rawStart = state['customRangeStart'];
-      final rawEnd = state['customRangeEnd'];
-      _customRangeStart = rawStart is String ? DateTime.tryParse(rawStart) : null;
-      _customRangeEnd = rawEnd is String ? DateTime.tryParse(rawEnd) : null;
-      _autoApplyRecurring = state['autoApplyRecurring'] is bool
-          ? state['autoApplyRecurring'] as bool
-          : _autoApplyRecurring;
-      _requireBiometric = state['requireBiometric'] is bool
-          ? state['requireBiometric'] as bool
-          : _requireBiometric;
-      _recurringExpenses
-        ..clear()
-        ..addAll(importedRecurring);
-
-      _isUSD = isUSD;
-      _exchangeRate = exchangeRate;
-      _monthlyBudgetCents = monthlyBudgetCents;
-      _expenses
-        ..clear()
-        ..addAll(importedExpenses);
-      _loadFailed = false;
-      _warningMessage = null;
-      _errorMessage = null;
-
-      _beginSaving();
-      try {
-        await _saveState();
-        return true;
-      } finally {
-        _finishSaving();
-      }
-    }).catchError((_) {
-      _errorMessage = 'Backup could not be restored. Check the data and try again.';
-      notifyListeners();
-      return false;
-    });
-  }
-
-  Future<void> _maybeBudgetAlert() async {
-    if (_monthlyBudgetCents <= 0) return;
-    final currentPeriod = _clock().year * 100 + _clock().month;
-    if (_budgetAlertPeriod != currentPeriod) {
-      _lastBudgetAlertLevel = 0;
-      _budgetAlertPeriod = currentPeriod;
+  Future<bool> toggleCurrency() => _mutate((s) => s.copyWith(isUSD: !s.isUSD));
+  Future<bool> updateSettings(double rate, double budget) {
+    if (!rate.isFinite ||
+        rate <= 0 ||
+        rate > 1000000 ||
+        !budget.isFinite ||
+        budget < 0 ||
+        budget > 9007199254740991 / 100) {
+      _errorMessage =
+          'Enter a rate above zero (up to 1,000,000) and a valid budget.';
+      _notify();
+      return Future.value(false);
     }
-    final percentage = monthlySpentCents / _monthlyBudgetCents * 100;
-    int level = 0;
-    if (percentage >= 120) {
-      level = 120;
-    } else if (percentage >= 100) {
-      level = 100;
-    } else if (percentage >= 80) {
-      level = 80;
-    }
-    if (level == 0 || level <= _lastBudgetAlertLevel) return;
-    _lastBudgetAlertLevel = level;
-    await QuickAddNotifications.showBudgetAlert(
-      percentage: level,
-      overBudget: percentage >= 100,
+    return _mutate(
+      (s) =>
+          s.copyWith(exchangeRate: rate, budgetCents: (budget * 100).round()),
     );
-    try {
-      await _saveState();
-    } catch (_) {
-      // Alert state is best-effort; spending data remains saved.
+  }
+
+  Future<bool> setRequireBiometric(bool value) =>
+      _mutate((s) => s.copyWith(requireBiometric: value));
+  Future<bool> setVoicePreferences({
+    required String locale,
+    required bool onDevice,
+  }) =>
+      _mutate((s) => s.copyWith(voiceLocale: locale, voiceOnDevice: onDevice));
+  Future<bool> setAutoApplyRecurring(bool value) => _mutate((s) {
+    final updated = s.copyWith(autoApplyRecurring: value);
+    return value ? _dueRecurring(updated) : updated;
+  });
+
+  Future<bool> addExpense(Expense expense) => _mutate((s) {
+    if (s.expenses.any((e) => e.id == expense.id)) {
+      throw const FormatException('An expense with this ID already exists.');
     }
-  }
-
-  String exportCsv() {
-    return ExpenseCsv.encode(_expenses.map((expense) => expense.toMap()).toList());
-  }
-
-  Future<bool> importCsv(String source) {
-    return _enqueue(() async {
-      final rows = ExpenseCsv.decode(source);
-      final imported = <Expense>[];
-      for (final row in rows) {
-        imported.add(Expense.fromMap(Map<String, dynamic>.from(row)));
-      }
-
-      _expenses
-        ..clear()
-        ..addAll(imported);
-      _expenses.sort((a, b) => b.date.compareTo(a.date));
-      _loadFailed = false;
-      _errorMessage = null;
-
-      _beginSaving();
-      try {
-        await _saveState();
-        return true;
-      } finally {
-        _finishSaving();
-      }
-    }).catchError((_) {
-      _errorMessage = 'CSV could not be imported. Check the file and try again.';
-      notifyListeners();
-      return false;
-    });
-  }
-
-  Future<bool> addRecurring(RecurringExpense recurring) {
-    return _enqueue(() async {
-      _recurringExpenses.add(recurring);
-      _beginSaving();
-      try {
-        await _saveState();
-        return true;
-      } catch (_) {
-        _recurringExpenses.removeWhere((item) => item.id == recurring.id);
-        _errorMessage = 'Recurring expense could not be saved.';
-        return false;
-      } finally {
-        _finishSaving();
-      }
-    });
-  }
-
-  Future<bool> removeRecurring(String id) {
-    final index = _recurringExpenses.indexWhere((item) => item.id == id);
-    if (index < 0) return Future.value(false);
-    final removed = _recurringExpenses.removeAt(index);
-    return _enqueue(() async {
-      _beginSaving();
-      try {
-        await _saveState();
-        return true;
-      } catch (_) {
-        _recurringExpenses.insert(index.clamp(0, _recurringExpenses.length), removed);
-        _errorMessage = 'Recurring expense could not be removed.';
-        return false;
-      } finally {
-        _finishSaving();
-      }
-    });
-  }
-
-  Future<bool> applyRecurring(String id) async {
-    final recurring = _recurringExpenses.firstWhere(
-      (item) => item.id == id,
-      orElse: () => throw StateError('missing'),
+    return s.copyWith(expenses: _sorted([...s.expenses, expense]));
+  });
+  Future<bool> updateExpense(Expense expense) => _mutate((s) {
+    if (!s.expenses.any((e) => e.id == expense.id)) {
+      throw const FormatException('Expense no longer exists.');
+    }
+    return s.copyWith(
+      expenses: _sorted(
+        s.expenses.map((e) => e.id == expense.id ? expense : e).toList(),
+      ),
     );
-    final now = _clock();
-    if (recurring.lastApplied != null &&
-        recurring.lastApplied!.year == now.year &&
-        recurring.lastApplied!.month == now.month) {
-      _errorMessage = 'This recurring expense was already applied this month.';
-      notifyListeners();
-      return false;
-    }
+  });
+  Future<ExpenseRemoval?> removeExpense(String id) async {
+    ExpenseRemoval? removal;
+    final saved = await _mutate((s) {
+      final index = s.expenses.indexWhere((e) => e.id == id);
+      if (index < 0) throw const FormatException('Expense no longer exists.');
+      removal = ExpenseRemoval(expense: s.expenses[index], index: index);
+      return s.copyWith(expenses: [...s.expenses]..removeAt(index));
+    });
+    return saved ? removal : null;
+  }
 
-    final day = recurring.dayOfMonth.clamp(1, _daysInMonth(now.year, now.month));
-    final date = DateTime(now.year, now.month, day);
+  Future<bool> restoreExpense(ExpenseRemoval removal) => _mutate((s) {
+    if (s.expenses.any((e) => e.id == removal.expense.id)) return s;
+    return s.copyWith(expenses: _sorted([...s.expenses, removal.expense]));
+  });
+  Future<bool> addRecurring(RecurringExpense item) => _mutate((s) {
+    item.validate();
+    if (s.recurring.any((e) => e.id == item.id)) {
+      throw const FormatException('Recurring template already exists.');
+    }
+    final updated = s.copyWith(recurring: [...s.recurring, item]);
+    return s.autoApplyRecurring ? _dueRecurring(updated) : updated;
+  });
+  Future<bool> removeRecurring(String id) => _mutate(
+    (s) => s.copyWith(recurring: s.recurring.where((e) => e.id != id).toList()),
+  );
+  Future<bool> applyRecurring(String id) =>
+      _mutate((s) => _applyRecurring(s, id));
+
+  ExpenseState _applyRecurring(ExpenseState state, String id) {
+    final item = state.recurring.where((e) => e.id == id).firstOrNull;
+    if (item == null) {
+      throw const FormatException('Recurring template no longer exists.');
+    }
+    item.validate();
+    final current = now;
+    final month = current.year * 100 + current.month;
+    final applied = item.lastApplied;
+    if (applied != null && applied.year * 100 + applied.month >= month) {
+      throw const FormatException(
+        'This recurring expense was already applied this month.',
+      );
+    }
+    final expenseId = 'recurring:$id:$month';
+    if (state.expenses.any((e) => e.id == expenseId)) {
+      throw const FormatException(
+        'This recurring expense was already applied this month.',
+      );
+    }
+    final day = item.dayOfMonth.clamp(
+      1,
+      DateTime(current.year, current.month + 1, 0).day,
+    );
     final expense = Expense(
-      id: DateTime.now().microsecondsSinceEpoch.toString(),
-      title: recurring.title,
-      amountCents: recurring.amountCents,
-      date: date,
-      category: recurring.category,
+      id: expenseId,
+      title: item.title,
+      amountCents: item.amountCents,
+      date: DateTime(current.year, current.month, day),
+      category: item.category,
     );
-
-    final saved = await addExpense(expense);
-    if (!saved) return false;
-
-    final index = _recurringExpenses.indexWhere((item) => item.id == id);
-    if (index >= 0) {
-      _recurringExpenses[index] = recurring.copyWith(lastApplied: now);
-      try {
-        await _saveState();
-      } catch (_) {
-        // Expense was added; recurring metadata is best-effort.
-      }
-    }
-    return true;
+    return state.copyWith(
+      expenses: _sorted([...state.expenses, expense]),
+      recurring: state.recurring
+          .map((e) => e.id == id ? e.copyWith(lastApplied: current) : e)
+          .toList(),
+    );
   }
 
-  static int _daysInMonth(int year, int month) {
-    return DateTime(year, month + 1, 0).day;
-  }
-
-  Future<bool> setAutoApplyRecurring(bool value) {
-    _autoApplyRecurring = value;
-    return _enqueue(() async {
-      _beginSaving();
-      try {
-        await _saveState();
-        return true;
-      } catch (_) {
-        _autoApplyRecurring = !value;
-        _errorMessage = 'Recurring setting could not be saved.';
-        return false;
-      } finally {
-        _finishSaving();
-      }
-    });
-  }
-
-  Future<void> _applyDueRecurring() async {
-    final now = _clock();
-    for (final recurring in List<RecurringExpense>.from(_recurringExpenses)) {
-      if (recurring.lastApplied != null &&
-          recurring.lastApplied!.year == now.year &&
-          recurring.lastApplied!.month == now.month) {
+  ExpenseState _dueRecurring(ExpenseState state) {
+    final current = now;
+    for (final item in state.recurring) {
+      final applied = item.lastApplied;
+      if (applied != null &&
+          applied.year * 100 + applied.month >=
+              current.year * 100 + current.month) {
         continue;
       }
-      if (recurring.dayOfMonth > now.day) continue;
-      await applyRecurring(recurring.id);
+      final day = item.dayOfMonth.clamp(
+        1,
+        DateTime(current.year, current.month + 1, 0).day,
+      );
+      if (day > current.day) continue;
+      state = _applyRecurring(state, item.id);
     }
+    return state;
   }
 
-  Future<bool> setRequireBiometric(bool value) {
-    _requireBiometric = value;
-    return _enqueue(() async {
-      _beginSaving();
-      try {
-        await _saveState();
-        return true;
-      } catch (_) {
-        _requireBiometric = !value;
-        _errorMessage = 'Security setting could not be saved.';
-        return false;
-      } finally {
-        _finishSaving();
+  Future<bool> reconcileRecurring() =>
+      _mutate((s) => s.autoApplyRecurring ? _dueRecurring(s) : s);
+
+  String exportState() => _state.encode();
+  String exportCsv() =>
+      ExpenseCsv.encode(_state.expenses.map((e) => e.toMap()).toList());
+  ExpenseState previewBackup(String source) => ExpenseState.decode(source);
+  List<Expense> previewCsv(String source) {
+    final rows = ExpenseCsv.decode(source);
+    if (rows.isEmpty) throw const FormatException('CSV contains no expenses.');
+    final ids = <String>{};
+    return rows.map((row) {
+      final e = Expense.fromMap(row);
+      if (!ids.add(e.id)) {
+        throw const FormatException('CSV contains duplicate IDs.');
       }
-    });
+      return e;
+    }).toList();
   }
 
-  Future<bool> _commit({
-    required VoidCallback apply,
-    required VoidCallback rollback,
-    required String failureMessage,
-  }) {
-    return _enqueue(() async {
-      apply();
-      _beginSaving();
+  Future<bool> importState(String source) => _mutate(
+    (s) => previewBackup(source).copyWith(requireBiometric: s.requireBiometric),
+    recovery: true,
+    allowRecovery: true,
+  );
+  Future<bool> importCsv(String source) => _mutate(
+    (s) => s.copyWith(expenses: _sorted(previewCsv(source))),
+    recovery: true,
+    allowRecovery: true,
+  );
+  Future<String?> recoveryBackup() => _repository.readRecovery();
+  Future<bool> resetStorage() =>
+      _mutate((_) => const ExpenseState(), allowRecovery: true, reset: true);
+
+  Future<bool> _mutate(
+    ExpenseState Function(ExpenseState) change, {
+    bool recovery = false,
+    bool allowRecovery = false,
+    bool reset = false,
+  }) async {
+    await initialized;
+    final completer = Completer<bool>();
+    _queue = _queue.then((_) async {
+      _isSaving = true;
+      _errorMessage = null;
+      _notify();
       try {
-        await _saveState();
-        return true;
-      } catch (_) {
-        rollback();
-        _errorMessage = failureMessage;
-        return false;
+        if (_loadFailed && !allowRecovery) {
+          throw const FormatException(
+            'Saved data could not be opened. Restore a valid backup or reset before making changes.',
+          );
+        }
+        var next = change(_state);
+        if (identical(next, _state)) {
+          completer.complete(true);
+          return;
+        }
+        // Alert delivery is independent of persistence; its deduplication marker
+        // is saved with the expense so a platform error cannot invite retries.
+        final period = now.year * 100 + now.month;
+        final previousLevel = _state.budgetAlertPeriod == period
+            ? _state.lastBudgetAlertLevel
+            : 0;
+        final ratio = next.budgetCents <= 0
+            ? 0.0
+            : _monthlyTotal(next) / next.budgetCents * 100;
+        final level = ratio >= 120
+            ? 120
+            : ratio >= 100
+            ? 100
+            : ratio >= 80
+            ? 80
+            : 0;
+        next = next.copyWith(
+          budgetAlertPeriod: period,
+          lastBudgetAlertLevel: reset
+              ? 0
+              : (level > previousLevel ? level : previousLevel),
+        );
+        final oldSource = recovery
+            ? (await _repository.read() ?? exportState())
+            : null;
+        await _repository.write(
+          next.encode(),
+          recovery: oldSource,
+          reset: reset,
+        );
+        _state = next;
+        _loadFailed = false;
+        _warningMessage = null;
+        if (reset) {
+          _timeFilter = 'Month';
+          _customRangeStart = null;
+          _customRangeEnd = null;
+        }
+        if (!reset && level > previousLevel) {
+          try {
+            await _budgetAlert(level);
+          } catch (_) {
+            /* Financial state is already committed. */
+          }
+        }
+        completer.complete(true);
+      } catch (error) {
+        _errorMessage = error is FormatException
+            ? error.message.toString()
+            : 'Changes could not be saved. Your previous data is unchanged.';
+        completer.complete(false);
       } finally {
-        _finishSaving();
-      }
-    });
-  }
-
-  Future<T> _enqueue<T>(Future<T> Function() operation) {
-    final completer = Completer<T>();
-    _mutationQueue = _mutationQueue.then((_) async {
-      try {
-        completer.complete(await operation());
-      } catch (error, stackTrace) {
-        completer.completeError(error, stackTrace);
+        _isSaving = false;
+        _notify();
       }
     });
     return completer.future;
   }
 
-  void _beginSaving() {
-    _errorMessage = null;
-    _isSaving = true;
-    notifyListeners();
-  }
-
-  void _finishSaving() {
-    _isSaving = false;
-    notifyListeners();
-  }
-
-  void _setError(String message) {
-    _errorMessage = message;
-    notifyListeners();
-  }
-
   Future<void> _loadData() async {
     try {
-      final preferences = await SharedPreferences.getInstance();
-      _preferences = preferences;
-      final stateJson = preferences.getString(_stateKey);
-      if (stateJson != null) {
-        _loadVersionedState(stateJson);
+      final source = await _repository.read();
+      if (source != null) {
+        _state = ExpenseState.decode(source);
       } else {
-        await _loadLegacyState(preferences);
+        final legacy = await _repository.readLegacy();
+        final expenses = <Expense>[];
+        final rows = legacy['expenses'];
+        var damaged = 0;
+        if (rows is List) {
+          for (final row in rows) {
+            try {
+              expenses.add(Expense.fromJson(row as String));
+            } catch (_) {
+              damaged++;
+            }
+          }
+        }
+        final rate = legacy['exchangeRate'];
+        final budget = legacy['monthlyBudget'];
+        _state = ExpenseState(
+          expenses: _sorted(expenses),
+          isUSD: legacy['isUSD'] is bool ? legacy['isUSD'] as bool : true,
+          exchangeRate:
+              rate is num && rate.isFinite && rate > 0 && rate <= 1000000
+              ? rate.toDouble()
+              : 540,
+          budgetCents:
+              budget is num &&
+                  budget.isFinite &&
+                  budget >= 0 &&
+                  budget <= 9007199254740991 / 100
+              ? (budget * 100).round()
+              : 50000,
+        );
+        if (damaged > 0) {
+          _warningMessage =
+              '${damaged == 1 ? 'One' : damaged} damaged ${damaged == 1 ? 'expense was' : 'expenses were'} skipped while loading. Original storage is preserved; restore a complete backup before making changes.';
+          _loadFailed = true;
+        }
+      }
+      if (!_loadFailed) {
+        // Complete migration only after the entire state has validated.
+        final next = _state.autoApplyRecurring ? _dueRecurring(_state) : _state;
+        await _repository.write(next.encode());
+        _state = next;
       }
     } catch (_) {
       _loadFailed = true;
       _errorMessage =
-          'Saved data could not be opened. No existing records were changed.';
+          'Saved data could not be opened. No existing records were changed. Restore a backup or reset in Settings.';
     } finally {
-      _expenses.sort((a, b) => b.date.compareTo(a.date));
-      if (_autoApplyRecurring && !_loadFailed) {
-        await _applyDueRecurring();
-      }
       _isLoading = false;
-      notifyListeners();
+      _notify();
     }
   }
 
-  void _loadVersionedState(String source) {
-    final decoded = jsonDecode(source);
-    if (decoded is! Map) {
-      throw const FormatException('Saved state must contain an object.');
-    }
-    final state = Map<String, dynamic>.from(decoded);
-    if (state['version'] != _stateVersion) {
-      throw const FormatException('Unsupported saved state version.');
-    }
-
-    _isUSD = state['isUSD'] is bool ? state['isUSD'] as bool : true;
-    _exchangeRate = _validRate(state['exchangeRate']) ?? _defaultExchangeRate;
-    _monthlyBudgetCents =
-        _validNonNegativeInteger(state['monthlyBudgetCents']) ??
-        _defaultBudgetCents;
-    final rawStart = state['customRangeStart'];
-    final rawEnd = state['customRangeEnd'];
-    _customRangeStart = rawStart is String ? DateTime.tryParse(rawStart) : null;
-    _customRangeEnd = rawEnd is String ? DateTime.tryParse(rawEnd) : null;
-    final currentPeriod = _clock().year * 100 + _clock().month;
-    _lastBudgetAlertLevel =
-        _validNonNegativeInteger(state['lastBudgetAlertLevel'])?.toInt() ?? 0;
-    _budgetAlertPeriod =
-        _validNonNegativeInteger(state['budgetAlertPeriod'])?.toInt() ?? currentPeriod;
-    if (_budgetAlertPeriod != currentPeriod) {
-      _lastBudgetAlertLevel = 0;
-      _budgetAlertPeriod = currentPeriod;
-    }
-    final rawRecurring = state['recurringExpenses'];
-    _recurringExpenses
-      ..clear()
-      ..addAll(_parseRecurringRows(rawRecurring));
-    _autoApplyRecurring = state['autoApplyRecurring'] is bool
-        ? state['autoApplyRecurring'] as bool
-        : false;
-    _requireBiometric = state['requireBiometric'] is bool
-        ? state['requireBiometric'] as bool
-        : false;
-
-    _expenses
-      ..clear()
-      ..addAll(_parseExpenseRows(state['expenses']));
+  static DateTime _startOfDay(DateTime date) =>
+      DateTime(date.year, date.month, date.day);
+  static List<Expense> _sorted(List<Expense> expenses) =>
+      expenses..sort((a, b) => b.date.compareTo(a.date));
+  void _notify() {
+    if (!_disposed) notifyListeners();
   }
 
-  Future<void> _loadLegacyState(SharedPreferences preferences) async {
-    _isUSD = preferences.getBool('isUSD') ?? true;
-    _exchangeRate =
-        _validRate(preferences.getDouble('exchangeRate')) ??
-        _defaultExchangeRate;
-    final legacyBudget = preferences.getDouble('monthlyBudget');
-    _monthlyBudgetCents =
-        legacyBudget != null &&
-            legacyBudget.isFinite &&
-            legacyBudget >= 0 &&
-            legacyBudget <= _maxSafeJsonInteger / 100
-        ? (legacyBudget * 100).round()
-        : _defaultBudgetCents;
-
-    final legacyRows = preferences.getStringList('expenses') ?? const [];
-    var skippedRows = 0;
-    for (final row in legacyRows) {
-      try {
-        _expenses.add(Expense.fromJson(row));
-      } catch (_) {
-        skippedRows++;
-      }
-    }
-    if (skippedRows > 0) {
-      _warningMessage = _skippedRowsMessage(skippedRows);
-    }
-
-    try {
-      await _saveState();
-    } catch (_) {
-      _warningMessage =
-          'Your data was loaded, but the storage upgrade could not be saved.';
-    }
-  }
-
-  Iterable<Expense> _parseExpenseRows(dynamic rawRows) sync* {
-    if (rawRows is! List) return;
-    var skippedRows = 0;
-    for (final rawRow in rawRows) {
-      try {
-        if (rawRow is! Map) throw const FormatException();
-        yield Expense.fromMap(Map<String, dynamic>.from(rawRow));
-      } catch (_) {
-        skippedRows++;
-      }
-    }
-    if (skippedRows > 0) {
-      _warningMessage = _skippedRowsMessage(skippedRows);
-    }
-  }
-
-  Iterable<RecurringExpense> _parseRecurringRows(dynamic rawRows) sync* {
-    if (rawRows is! List) return;
-    for (final rawRow in rawRows) {
-      try {
-        if (rawRow is! Map) throw const FormatException();
-        yield RecurringExpense.fromMap(Map<String, dynamic>.from(rawRow));
-      } catch (_) {
-        // Skip damaged recurring rows.
-      }
-    }
-  }
-
-  Future<void> _saveState() async {
-    if (_loadFailed) {
-      throw StateError('Saved data could not be opened; writes are blocked.');
-    }
-    final preferences = _preferences ?? await SharedPreferences.getInstance();
-    _preferences = preferences;
-    final state = <String, dynamic>{
-      'version': _stateVersion,
-      'isUSD': _isUSD,
-      'exchangeRate': _exchangeRate,
-      'monthlyBudgetCents': _monthlyBudgetCents,
-      'customRangeStart': _customRangeStart?.toIso8601String(),
-      'customRangeEnd': _customRangeEnd?.toIso8601String(),
-      'recurringExpenses': _recurringExpenses.map((item) => item.toMap()).toList(),
-      'autoApplyRecurring': _autoApplyRecurring,
-      'requireBiometric': _requireBiometric,
-      'lastBudgetAlertLevel': _lastBudgetAlertLevel,
-      'budgetAlertPeriod': _budgetAlertPeriod,
-      'expenses': _expenses.map((expense) => expense.toMap()).toList(),
-    };
-    final saved = await preferences.setString(_stateKey, jsonEncode(state));
-    if (!saved) throw StateError('Shared preferences rejected the write.');
-  }
-
-  static DateTime _startOfDay(DateTime value) {
-    return DateTime(value.year, value.month, value.day);
-  }
-
-  static DateTime _startOfWeek(DateTime value) {
-    final day = _startOfDay(value);
-    return day.subtract(Duration(days: day.weekday - DateTime.monday));
-  }
-
-  static double? _validRate(dynamic value) {
-    if (value is! num) return null;
-    final result = value.toDouble();
-    return result.isFinite && result > 0 ? result : null;
-  }
-
-  static int? _validNonNegativeInteger(dynamic value) {
-    if (value is! num || !value.isFinite || value < 0) return null;
-    final result = value.toDouble();
-    if (result != result.truncateToDouble() || result > _maxSafeJsonInteger) {
-      return null;
-    }
-    return result.toInt();
-  }
-
-  static String _skippedRowsMessage(int count) {
-    return count == 1
-        ? 'One damaged expense was skipped while loading your history.'
-        : '$count damaged expenses were skipped while loading your history.';
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
   }
 }

@@ -15,10 +15,10 @@ class InsightsSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final provider = context.watch<ExpenseProvider>();
     String currency(int cents) => CurrencyFormatter.displayFromUsdCents(
-          usdCents: cents,
-          isUsd: provider.isUSD,
-          exchangeRate: provider.exchangeRate,
-        );
+      usdCents: cents,
+      isUsd: provider.isUSD,
+      exchangeRate: provider.exchangeRate,
+    );
 
     final totals = provider.categoryTotals;
     final sortedCategories = totals.entries.toList()
@@ -34,7 +34,7 @@ class InsightsSheet extends StatelessWidget {
 
     return AppSheet(
       title: 'Insights',
-      subtitle: 'Patterns from your current and previous month.',
+      subtitle: 'Monthly totals, with change compared to the same elapsed period.',
       closeLabel: 'Close insights',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -48,7 +48,7 @@ class InsightsSheet extends StatelessWidget {
             value: currency(provider.previousMonthSpentCents),
           ),
           _InsightRow(
-            label: 'Month-over-month',
+            label: 'Vs. same period last month',
             value: changeLabel,
             valueColor: change > 0 ? AppColors.danger : AppColors.success,
           ),
@@ -57,14 +57,17 @@ class InsightsSheet extends StatelessWidget {
             value: currency(provider.dailyAverageCents),
           ),
           const SizedBox(height: AppSpacing.lg),
-          Text('Top categories', style: Theme.of(context).textTheme.titleMedium),
+          Text(
+            'Top categories',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
           const SizedBox(height: AppSpacing.sm),
           if (sortedCategories.isEmpty)
             Text(
               'No expenses this month yet.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
             )
           else
             ...sortedCategories.map((entry) {
@@ -104,16 +107,23 @@ class InsightsSheet extends StatelessWidget {
           FilledButton.icon(
             onPressed: () {
               final provider = context.read<ExpenseProvider>();
-              String currency(int cents) => CurrencyFormatter.displayFromUsdCents(
+              String currency(int cents) =>
+                  CurrencyFormatter.displayFromUsdCents(
                     usdCents: cents,
                     isUsd: provider.isUSD,
                     exchangeRate: provider.exchangeRate,
                   );
               final buffer = StringBuffer();
               buffer.writeln('Judgy monthly summary');
-              buffer.writeln('This month: ${currency(provider.monthlySpentCents)}');
-              buffer.writeln('Previous month: ${currency(provider.previousMonthSpentCents)}');
-              buffer.writeln('Daily average: ${currency(provider.dailyAverageCents)}');
+              buffer.writeln(
+                'This month: ${currency(provider.monthlySpentCents)}',
+              );
+              buffer.writeln(
+                'Previous month: ${currency(provider.previousMonthSpentCents)}',
+              );
+              buffer.writeln(
+                'Daily average: ${currency(provider.dailyAverageCents)}',
+              );
               buffer.writeln('Categories:');
               provider.categoryTotals.entries.toList()
                 ..sort((a, b) => b.value.compareTo(a.value))
@@ -155,16 +165,16 @@ class _InsightRow extends StatelessWidget {
           Expanded(
             child: Text(
               label,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
             ),
           ),
           Text(
             value,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: valueColor ?? AppColors.textPrimary,
-                ),
+              color: valueColor ?? AppColors.textPrimary,
+            ),
           ),
         ],
       ),
