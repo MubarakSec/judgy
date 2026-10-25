@@ -6,6 +6,7 @@ import '../theme/app_theme.dart';
 import '../widgets/expense_tile.dart';
 import '../widgets/time_filter_tabs.dart';
 import '../widgets/total_spent_card.dart';
+import '../models/expense.dart';
 import '../utils/currency_formatter.dart';
 import 'add_expense_sheet.dart';
 import 'settings_sheet.dart';
@@ -24,6 +25,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  String _sortMode = 'Date';
 
   @override
   void dispose() {
@@ -130,6 +132,17 @@ class _HomeScreenState extends State<HomeScreen> {
                   ).toLowerCase().contains(query),
             )
             .toList(growable: false);
+    final sortedExpenses = List<Expense>.from(visibleExpenses);
+    switch (_sortMode) {
+      case 'Amount':
+        sortedExpenses.sort((a, b) => b.amountCents.compareTo(a.amountCents));
+        break;
+      case 'Title':
+        sortedExpenses.sort((a, b) => a.title.compareTo(b.title));
+        break;
+      default:
+        sortedExpenses.sort((a, b) => b.date.compareTo(a.date));
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -185,6 +198,19 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     onChanged: (value) => setState(() => _searchQuery = value),
                   ),
+                  const SizedBox(height: AppSpacing.sm),
+                  DropdownButtonFormField<String>(
+                    initialValue: _sortMode,
+                    decoration: const InputDecoration(labelText: 'Sort by'),
+                    items: const [
+                      DropdownMenuItem(value: 'Date', child: Text('Date')),
+                      DropdownMenuItem(value: 'Amount', child: Text('Amount')),
+                      DropdownMenuItem(value: 'Title', child: Text('Title')),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) setState(() => _sortMode = value);
+                    },
+                  ),
                   if (provider.errorMessage != null ||
                       provider.warningMessage != null) ...[
                     const SizedBox(height: AppSpacing.md),
@@ -206,7 +232,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   Expanded(
-                    child: visibleExpenses.isEmpty
+                    child: sortedExpenses.isEmpty
                         ? _EmptyState(
                             hasAnyExpenses: provider.expenses.isNotEmpty,
                             period: query.isEmpty
@@ -218,9 +244,9 @@ class _HomeScreenState extends State<HomeScreen> {
                             padding: const EdgeInsets.only(bottom: 104),
                             keyboardDismissBehavior:
                                 ScrollViewKeyboardDismissBehavior.onDrag,
-                            itemCount: visibleExpenses.length,
+                            itemCount: sortedExpenses.length,
                             itemBuilder: (_, index) {
-                              return ExpenseTile(expense: visibleExpenses[index]);
+                              return ExpenseTile(expense: sortedExpenses[index]);
                             },
                           ),
                   ),
