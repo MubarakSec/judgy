@@ -113,6 +113,12 @@ class _RecurringSheetState extends State<RecurringSheet> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Auto-apply due recurring expenses'),
+            value: provider.autoApplyRecurring,
+            onChanged: (value) => provider.setAutoApplyRecurring(value),
+          ),
           FilledButton.icon(
             onPressed: _add,
             icon: const Icon(Icons.add),

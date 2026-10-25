@@ -47,11 +47,13 @@ class ExpenseProvider with ChangeNotifier {
   String? _errorMessage;
   bool _loadFailed = false;
   final List<RecurringExpense> _recurringExpenses = [];
+  bool _autoApplyRecurring = false;
   int _lastBudgetAlertLevel = 0;
   int _budgetAlertPeriod = 0;
 
   UnmodifiableListView<Expense> get expenses => UnmodifiableListView(_expenses);
   UnmodifiableListView<RecurringExpense> get recurringExpenses => UnmodifiableListView(_recurringExpenses);
+  bool get autoApplyRecurring => _autoApplyRecurring;
   DateTime get now => _clock();
   bool get isUSD => _isUSD;
   double get exchangeRate => _exchangeRate;
@@ -297,6 +299,7 @@ class ExpenseProvider with ChangeNotifier {
       'exchangeRate': _exchangeRate,
       'monthlyBudgetCents': _monthlyBudgetCents,
       'recurringExpenses': _recurringExpenses.map((item) => item.toMap()).toList(),
+      'autoApplyRecurring': _autoApplyRecurring,
       'lastBudgetAlertLevel': _lastBudgetAlertLevel,
       'budgetAlertPeriod': _budgetAlertPeriod,
       'expenses': _expenses.map((expense) => expense.toMap()).toList(),
@@ -330,6 +333,9 @@ class ExpenseProvider with ChangeNotifier {
       }
       final importedExpenses = _parseExpenseRows(state['expenses']).toList();
       final importedRecurring = _parseRecurringRows(state['recurringExpenses']).toList();
+      _autoApplyRecurring = state['autoApplyRecurring'] is bool
+          ? state['autoApplyRecurring'] as bool
+          : _autoApplyRecurring;
       _recurringExpenses
         ..clear()
         ..addAll(importedRecurring);
@@ -499,6 +505,36 @@ class ExpenseProvider with ChangeNotifier {
     return DateTime(year, month + 1, 0).day;
   }
 
+  Future<bool> setAutoApplyRecurring(bool value) {
+    _autoApplyRecurring = value;
+    return _enqueue(() async {
+      _beginSaving();
+      try {
+        await _saveState();
+        return true;
+      } catch (_) {
+        _autoApplyRecurring = !value;
+        _errorMessage = 'Recurring setting could not be saved.';
+        return false;
+      } finally {
+        _finishSaving();
+      }
+    });
+  }
+
+  Future<void> _applyDueRecurring() async {
+    final now = _clock();
+    for (final recurring in List<RecurringExpense>.from(_recurringExpenses)) {
+      if (recurring.lastApplied != null &&
+          recurring.lastApplied!.year == now.year &&
+          recurring.lastApplied!.month == now.month) {
+        continue;
+      }
+      if (recurring.dayOfMonth > now.day) continue;
+      await applyRecurring(recurring.id);
+    }
+  }
+
   Future<bool> _commit({
     required VoidCallback apply,
     required VoidCallback rollback,
@@ -564,6 +600,9 @@ class ExpenseProvider with ChangeNotifier {
           'Saved data could not be opened. No existing records were changed.';
     } finally {
       _expenses.sort((a, b) => b.date.compareTo(a.date));
+      if (_autoApplyRecurring && !_loadFailed) {
+        await _applyDueRecurring();
+      }
       _isLoading = false;
       notifyListeners();
     }
@@ -597,6 +636,9 @@ class ExpenseProvider with ChangeNotifier {
     _recurringExpenses
       ..clear()
       ..addAll(_parseRecurringRows(rawRecurring));
+    _autoApplyRecurring = state['autoApplyRecurring'] is bool
+        ? state['autoApplyRecurring'] as bool
+        : false;
 
     _expenses
       ..clear()
@@ -678,6 +720,7 @@ class ExpenseProvider with ChangeNotifier {
       'exchangeRate': _exchangeRate,
       'monthlyBudgetCents': _monthlyBudgetCents,
       'recurringExpenses': _recurringExpenses.map((item) => item.toMap()).toList(),
+      'autoApplyRecurring': _autoApplyRecurring,
       'lastBudgetAlertLevel': _lastBudgetAlertLevel,
       'budgetAlertPeriod': _budgetAlertPeriod,
       'expenses': _expenses.map((expense) => expense.toMap()).toList(),
