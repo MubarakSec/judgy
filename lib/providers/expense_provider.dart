@@ -20,7 +20,7 @@ class ExpenseRemoval {
 class ExpenseProvider with ChangeNotifier {
   static const _stateKey = 'judgy_state_v2';
   static const _stateVersion = 2;
-  static const _validFilters = {'Day', 'Week', 'Month'};
+  static const _validFilters = {'Day', 'Week', 'Month', 'Custom'};
   static const _defaultExchangeRate = 540.0;
   static const _maxExchangeRate = 1000000.0;
   static const _defaultBudgetCents = 50000;
@@ -41,6 +41,8 @@ class ExpenseProvider with ChangeNotifier {
   double _exchangeRate = _defaultExchangeRate;
   int _monthlyBudgetCents = _defaultBudgetCents;
   String _timeFilter = 'Month';
+  DateTime? _customRangeStart;
+  DateTime? _customRangeEnd;
   bool _isLoading = true;
   bool _isSaving = false;
   String? _warningMessage;
@@ -60,6 +62,8 @@ class ExpenseProvider with ChangeNotifier {
   int get monthlyBudgetCents => _monthlyBudgetCents;
   double get monthlyBudget => _monthlyBudgetCents / 100;
   String get timeFilter => _timeFilter;
+  DateTime? get customRangeStart => _customRangeStart;
+  DateTime? get customRangeEnd => _customRangeEnd;
   bool get isLoading => _isLoading;
   bool get isSaving => _isSaving;
   String? get warningMessage => _warningMessage;
@@ -73,13 +77,17 @@ class ExpenseProvider with ChangeNotifier {
     final start = switch (_timeFilter) {
       'Day' => _startOfDay(now),
       'Week' => _startOfWeek(now),
+      'Custom' => _customRangeStart ?? _startOfDay(now),
       _ => DateTime(now.year, now.month),
     };
+    final end = _timeFilter == 'Custom'
+        ? (_customRangeEnd ?? now)
+        : now;
 
     return _expenses
         .where(
           (expense) =>
-              !expense.date.isBefore(start) && !expense.date.isAfter(now),
+              !expense.date.isBefore(start) && !expense.date.isAfter(end),
         )
         .toList(growable: false);
   }
@@ -150,6 +158,13 @@ class ExpenseProvider with ChangeNotifier {
   void setTimeFilter(String filter) {
     if (!_validFilters.contains(filter) || _timeFilter == filter) return;
     _timeFilter = filter;
+    notifyListeners();
+  }
+
+  void setCustomRange(DateTime start, DateTime end) {
+    _customRangeStart = _startOfDay(start);
+    _customRangeEnd = _startOfDay(end).add(const Duration(days: 1)).subtract(const Duration(seconds: 1));
+    _timeFilter = 'Custom';
     notifyListeners();
   }
 
@@ -298,6 +313,8 @@ class ExpenseProvider with ChangeNotifier {
       'isUSD': _isUSD,
       'exchangeRate': _exchangeRate,
       'monthlyBudgetCents': _monthlyBudgetCents,
+      'customRangeStart': _customRangeStart?.toIso8601String(),
+      'customRangeEnd': _customRangeEnd?.toIso8601String(),
       'recurringExpenses': _recurringExpenses.map((item) => item.toMap()).toList(),
       'autoApplyRecurring': _autoApplyRecurring,
       'lastBudgetAlertLevel': _lastBudgetAlertLevel,
@@ -333,6 +350,10 @@ class ExpenseProvider with ChangeNotifier {
       }
       final importedExpenses = _parseExpenseRows(state['expenses']).toList();
       final importedRecurring = _parseRecurringRows(state['recurringExpenses']).toList();
+      final rawStart = state['customRangeStart'];
+      final rawEnd = state['customRangeEnd'];
+      _customRangeStart = rawStart is String ? DateTime.tryParse(rawStart) : null;
+      _customRangeEnd = rawEnd is String ? DateTime.tryParse(rawEnd) : null;
       _autoApplyRecurring = state['autoApplyRecurring'] is bool
           ? state['autoApplyRecurring'] as bool
           : _autoApplyRecurring;
@@ -623,6 +644,10 @@ class ExpenseProvider with ChangeNotifier {
     _monthlyBudgetCents =
         _validNonNegativeInteger(state['monthlyBudgetCents']) ??
         _defaultBudgetCents;
+    final rawStart = state['customRangeStart'];
+    final rawEnd = state['customRangeEnd'];
+    _customRangeStart = rawStart is String ? DateTime.tryParse(rawStart) : null;
+    _customRangeEnd = rawEnd is String ? DateTime.tryParse(rawEnd) : null;
     final currentPeriod = _clock().year * 100 + _clock().month;
     _lastBudgetAlertLevel =
         _validNonNegativeInteger(state['lastBudgetAlertLevel'])?.toInt() ?? 0;
@@ -719,6 +744,8 @@ class ExpenseProvider with ChangeNotifier {
       'isUSD': _isUSD,
       'exchangeRate': _exchangeRate,
       'monthlyBudgetCents': _monthlyBudgetCents,
+      'customRangeStart': _customRangeStart?.toIso8601String(),
+      'customRangeEnd': _customRangeEnd?.toIso8601String(),
       'recurringExpenses': _recurringExpenses.map((item) => item.toMap()).toList(),
       'autoApplyRecurring': _autoApplyRecurring,
       'lastBudgetAlertLevel': _lastBudgetAlertLevel,
