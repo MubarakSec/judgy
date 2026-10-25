@@ -6,14 +6,14 @@
 ## High
 - [x] Centralize categories (label, icon, quotes) in one registry; remove duplicates.
 - [ ] Date picker + edit expense (backdated entries, edit flow).
-- [ ] Release identity: applicationId/package name, signing config; update README (Android-only).
+- [x] Release identity: applicationId/package name, signing config; update README (Android-only).
 - [ ] Storage abstraction: repository interface + move from SharedPreferences to SQLite/drift (before search/export).
 
 ## Medium
-- [ ] Exchange rate upper bound validation.
-- [ ] Fix TotalSpentCard progress-bar Semantics (inside ExcludeSemantics).
-- [ ] Remove unused compatibility code (displayTotal/displayBudget/totalSpentUSD) or wire up.
-- [ ] Add LICENSE, CI (flutter analyze + test), screenshots.
+- [x] Exchange rate upper bound validation.
+- [x] Fix TotalSpentCard progress-bar Semantics (inside ExcludeSemantics).
+- [x] Remove unused compatibility code (displayTotal/displayBudget/totalSpentUSD) or wire up.
+- [x] Add LICENSE, CI (flutter analyze + test), screenshots.
 
 ## Product (new)
 - [ ] Voice quick-add parsing Arabic commands ("زيادة"/"ناقص") and add expense.
