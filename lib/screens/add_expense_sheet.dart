@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:speech_to_text/speech_to_text.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
@@ -6,6 +7,7 @@ import '../models/expense.dart';
 import '../providers/expense_provider.dart';
 import '../theme/app_theme.dart';
 import '../utils/currency_formatter.dart';
+import '../utils/voice_expense_parser.dart';
 import '../utils/expense_categories.dart';
 import '../utils/judgy_quotes.dart';
 import '../widgets/app_sheet.dart';
@@ -24,12 +26,44 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
   String _selectedCategory = ExpenseCategory.labels.first;
   String? _submitError;
   bool _isSubmitting = false;
+  final SpeechToText _speech = SpeechToText();
+  bool _isListening = false;
 
   @override
   void dispose() {
+    _speech.stop();
     _titleController.dispose();
     _amountController.dispose();
     super.dispose();
+  }
+
+  Future<void> _toggleListening() async {
+    if (_isListening) {
+      await _speech.stop();
+      if (mounted) setState(() => _isListening = false);
+      return;
+    }
+    final available = await _speech.initialize();
+    if (!available) {
+      if (mounted) {
+        setState(() => _submitError = 'Speech recognition is unavailable.');
+      }
+      return;
+    }
+    if (mounted) setState(() => _isListening = true);
+    await _speech.listen(
+      listenOptions: SpeechListenOptions(localeId: 'ar_SA'),
+      onResult: (result) {
+        final parsed = VoiceExpenseParser.parse(result.recognizedWords);
+        _titleController.text = parsed.title;
+        if (parsed.amount != null) {
+          _amountController.text = parsed.amount!.toString();
+        }
+        if (result.finalResult && mounted) {
+          setState(() => _isListening = false);
+        }
+      },
+    );
   }
 
   Future<void> _submitData() async {
@@ -97,9 +131,14 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
               textCapitalization: TextCapitalization.sentences,
               textInputAction: TextInputAction.next,
               inputFormatters: [LengthLimitingTextInputFormatter(80)],
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Expense name',
                 hintText: 'Coffee, groceries, taxi…',
+                suffixIcon: IconButton(
+                  tooltip: _isListening ? 'Stop listening' : 'Add by voice',
+                  onPressed: _isSubmitting ? null : _toggleListening,
+                  icon: Icon(_isListening ? Icons.mic : Icons.mic_none),
+                ),
               ),
               validator: (value) {
                 if (value == null || value.trim().isEmpty) {

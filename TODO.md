@@ -16,7 +16,7 @@
 - [x] Add LICENSE, CI (flutter analyze + test), screenshots.
 
 ## Product (new)
-- [ ] Voice quick-add parsing Arabic commands ("زيادة"/"ناقص") and add expense.
+- [x] Voice quick-add parsing Arabic commands ("زيادة"/"ناقص") and add expense.
 - [ ] Quick-add from notification / always-on surface for fast entry.
 - [ ] Keep personal tool efficient and low battery; avoid hardcoded values.
 
