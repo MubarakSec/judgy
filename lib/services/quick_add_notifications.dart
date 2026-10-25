@@ -15,6 +15,11 @@ class QuickAddNotifications {
     const settings = InitializationSettings(android: androidSettings);
     await _plugin.initialize(settings: settings);
 
+    await _plugin
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.requestNotificationsPermission();
+
     const channel = AndroidNotificationChannel(
       'judgy_quick_add',
       'Judgy quick add',

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/expense_provider.dart';
@@ -39,6 +40,62 @@ class _SettingsSheetState extends State<SettingsSheet> {
     _rateController.dispose();
     _budgetController.dispose();
     super.dispose();
+  }
+
+  Future<void> _copyBackup() async {
+    final backup = context.read<ExpenseProvider>().exportState();
+    await Clipboard.setData(ClipboardData(text: backup));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Backup copied to clipboard.')),
+    );
+  }
+
+  Future<void> _restoreBackup() async {
+    final controller = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Restore backup'),
+          content: TextField(
+            controller: controller,
+            minLines: 4,
+            maxLines: 8,
+            decoration: const InputDecoration(
+              hintText: 'Paste backup JSON here',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Restore'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() {
+      _isSaving = true;
+      _saveError = null;
+    });
+    final provider = context.read<ExpenseProvider>();
+    final saved = await provider.importState(controller.text);
+    if (!mounted) return;
+    if (saved) {
+      Navigator.of(context).pop(true);
+    } else {
+      setState(() {
+        _saveError = provider.errorMessage ?? 'Backup could not be restored.';
+        _isSaving = false;
+      });
+    }
   }
 
   Future<void> _save() async {
@@ -139,6 +196,38 @@ class _SettingsSheetState extends State<SettingsSheet> {
                     )
                   : const Icon(Icons.check),
               label: Text(_isSaving ? 'Saving…' : 'Save settings'),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            const Divider(),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              'Backup',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              'Copy your data to the clipboard or restore it from a backup.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _isSaving ? null : _copyBackup,
+                    icon: const Icon(Icons.copy_all_outlined),
+                    label: const Text('Copy backup'),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _isSaving ? null : _restoreBackup,
+                    icon: const Icon(Icons.restore_outlined),
+                    label: const Text('Restore'),
+                  ),
+                ),
+              ],
             ),
           ],
         ),

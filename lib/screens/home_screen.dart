@@ -6,6 +6,7 @@ import '../theme/app_theme.dart';
 import '../widgets/expense_tile.dart';
 import '../widgets/time_filter_tabs.dart';
 import '../widgets/total_spent_card.dart';
+import '../utils/currency_formatter.dart';
 import 'add_expense_sheet.dart';
 import 'settings_sheet.dart';
 
@@ -19,6 +20,15 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -81,6 +91,21 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final provider = context.watch<ExpenseProvider>();
     final filtered = provider.filteredExpenses;
+    final query = _searchQuery.trim().toLowerCase();
+    final visibleExpenses = query.isEmpty
+        ? filtered
+        : filtered
+            .where(
+              (expense) =>
+                  expense.title.toLowerCase().contains(query) ||
+                  expense.category.toLowerCase().contains(query) ||
+                  CurrencyFormatter.displayFromUsdCents(
+                    usdCents: expense.amountCents,
+                    isUsd: provider.isUSD,
+                    exchangeRate: provider.exchangeRate,
+                  ).toLowerCase().contains(query),
+            )
+            .toList(growable: false);
 
     return Scaffold(
       appBar: AppBar(
@@ -116,6 +141,16 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   const SizedBox(height: AppSpacing.xs),
                   const TimeFilterTabs(),
+                  const SizedBox(height: AppSpacing.sm),
+                  TextField(
+                    controller: _searchController,
+                    textInputAction: TextInputAction.search,
+                    decoration: const InputDecoration(
+                      hintText: 'Search expenses, categories, amounts…',
+                      prefixIcon: Icon(Icons.search),
+                    ),
+                    onChanged: (value) => setState(() => _searchQuery = value),
+                  ),
                   if (provider.errorMessage != null ||
                       provider.warningMessage != null) ...[
                     const SizedBox(height: AppSpacing.md),
@@ -137,19 +172,21 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   Expanded(
-                    child: filtered.isEmpty
+                    child: visibleExpenses.isEmpty
                         ? _EmptyState(
                             hasAnyExpenses: provider.expenses.isNotEmpty,
-                            period: provider.timeFilter.toLowerCase(),
+                            period: query.isEmpty
+                                ? provider.timeFilter.toLowerCase()
+                                : 'matching "$_searchQuery"',
                             onAdd: () => _openAddExpense(context),
                           )
                         : ListView.builder(
                             padding: const EdgeInsets.only(bottom: 104),
                             keyboardDismissBehavior:
                                 ScrollViewKeyboardDismissBehavior.onDrag,
-                            itemCount: filtered.length,
+                            itemCount: visibleExpenses.length,
                             itemBuilder: (_, index) {
-                              return ExpenseTile(expense: filtered[index]);
+                              return ExpenseTile(expense: visibleExpenses[index]);
                             },
                           ),
                   ),

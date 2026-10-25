@@ -236,6 +236,58 @@ class ExpenseProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  String exportState() {
+    return jsonEncode(<String, dynamic>{
+      'version': _stateVersion,
+      'isUSD': _isUSD,
+      'exchangeRate': _exchangeRate,
+      'monthlyBudgetCents': _monthlyBudgetCents,
+      'expenses': _expenses.map((expense) => expense.toMap()).toList(),
+    });
+  }
+
+  Future<bool> importState(String source) {
+    return _enqueue(() async {
+      final decoded = jsonDecode(source);
+      if (decoded is! Map) {
+        throw const FormatException('Backup must contain an object.');
+      }
+      final state = Map<String, dynamic>.from(decoded);
+      if (state['version'] != _stateVersion) {
+        throw const FormatException('Unsupported backup version.');
+      }
+
+      final isUSD = state['isUSD'] is bool ? state['isUSD'] as bool : _isUSD;
+      final exchangeRate = _validRate(state['exchangeRate']) ?? _exchangeRate;
+      final monthlyBudgetCents =
+          _validNonNegativeInteger(state['monthlyBudgetCents']) ??
+          _monthlyBudgetCents;
+      final importedExpenses = _parseExpenseRows(state['expenses']).toList();
+
+      _isUSD = isUSD;
+      _exchangeRate = exchangeRate;
+      _monthlyBudgetCents = monthlyBudgetCents;
+      _expenses
+        ..clear()
+        ..addAll(importedExpenses);
+      _loadFailed = false;
+      _warningMessage = null;
+      _errorMessage = null;
+
+      _beginSaving();
+      try {
+        await _saveState();
+        return true;
+      } finally {
+        _finishSaving();
+      }
+    }).catchError((_) {
+      _errorMessage = 'Backup could not be restored. Check the data and try again.';
+      notifyListeners();
+      return false;
+    });
+  }
+
   Future<bool> _commit({
     required VoidCallback apply,
     required VoidCallback rollback,

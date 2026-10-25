@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:uuid/uuid.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -100,8 +101,7 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
 
     try {
       final isEditing = widget.expense != null;
-    final expenseId = widget.expense?.id ??
-        DateTime.now().microsecondsSinceEpoch.toString();
+    final expenseId = widget.expense?.id ?? const Uuid().v4();
     final expense = Expense.fromEnteredAmount(
         id: expenseId,
         title: _titleController.text.trim(),
