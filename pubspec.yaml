@@ -1,4 +1,4 @@
-name: final_project
+name: judgy
 description: "A private, local-first expense tracker with a playful accountability voice."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.

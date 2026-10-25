@@ -1,4 +1,4 @@
-import 'package:final_project/models/expense.dart';
+import 'package:judgy/models/expense.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

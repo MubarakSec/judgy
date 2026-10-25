@@ -1,7 +1,7 @@
 import 'dart:convert';
 
-import 'package:final_project/models/expense.dart';
-import 'package:final_project/providers/expense_provider.dart';
+import 'package:judgy/models/expense.dart';
+import 'package:judgy/providers/expense_provider.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

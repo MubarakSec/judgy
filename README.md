@@ -26,5 +26,5 @@ flutter test
 flutter run
 ```
 
-The app targets Android and iOS. A real-device pass is recommended for bottom
+The app targets Android. A real-device pass is recommended for bottom
 sheet safe areas, keyboard behavior, large text, and accessibility semantics.

@@ -1,4 +1,4 @@
-import 'package:final_project/utils/currency_formatter.dart';
+import 'package:judgy/utils/currency_formatter.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
