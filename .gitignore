@@ -50,3 +50,7 @@ app.*.map.json
 # Rendered UI references (generated, not tracked)
 references/
 refrences/
+
+# Gradle/JVM diagnostics
+/android/build/
+*.hprof

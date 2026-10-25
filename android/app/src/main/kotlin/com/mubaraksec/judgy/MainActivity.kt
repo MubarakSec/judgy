@@ -1,4 +1,4 @@
-package com.example.final_project
+package com.mubaraksec.judgy
 
 import io.flutter.embedding.android.FlutterActivity
 
