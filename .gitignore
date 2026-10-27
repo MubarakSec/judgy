@@ -51,6 +51,9 @@ app.*.map.json
 references/
 refrences/
 
+# Offline speech model (fetch with tool/fetch_whisper_model.sh)
+/assets/models/whisper/*.bin
+
 # Gradle/JVM diagnostics
 /android/build/
 *.hprof

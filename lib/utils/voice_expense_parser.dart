@@ -213,11 +213,26 @@ class VoiceExpenseParser {
       .replaceAll('ة', 'ه')
       .replaceAll('ى', 'ي');
   static String _numberToken(String token) {
-    if (token.startsWith('و') && token.length > 1) {
-      final rest = token.substring(1);
-      if (_numbers.containsKey(rest) || _scales.containsKey(rest)) return rest;
+    if (token.length > 1) {
+      for (final prefix in const ['و', 'ب', 'ل']) {
+        if (token.startsWith(prefix)) {
+          final rest = token.substring(1);
+          if (_numbers.containsKey(rest) || _scales.containsKey(rest)) {
+            return rest;
+          }
+        }
+      }
     }
     return token;
+  }
+
+  /// Removes Arabic preposition/article prefixes so "بالريال", "الريال", and
+  /// "ريالاً" all compare as the currency word.
+  static String _currencyToken(String token) {
+    var value = token;
+    if (value.startsWith('ب') && value.length > 2) value = value.substring(1);
+    if (value.startsWith('ال') && value.length > 2) value = value.substring(2);
+    return value;
   }
 
   static VoiceExpenseDraft parse(String spoken, {DateTime? now}) {
@@ -245,15 +260,16 @@ class VoiceExpenseParser {
         intent = VoiceIntent.income;
         used.add(i);
       }
-      if (_usd.contains(token)) {
+      final currencyToken = _currencyToken(token);
+      if (_usd.contains(currencyToken) || currencyToken.startsWith('دولار')) {
         currencies.add('USD');
         used.add(i);
       }
-      if (_yer.contains(token)) {
+      if (_yer.contains(currencyToken) || currencyToken.startsWith('ريال')) {
         currencies.add('YER');
         used.add(i);
       }
-      if (_unsupported.contains(token)) {
+      if (_unsupported.contains(currencyToken)) {
         issues.add('Only USD and Yemeni riyal (YER) are supported.');
         used.add(i);
       }
@@ -316,7 +332,7 @@ class VoiceExpenseParser {
     final lowerTitle = _normalize(title);
     var category = 'Other';
     const categoryWords = {
-      'Coffee': ['coffee', 'cafe', 'قهوه', 'كافي'],
+      'Coffee': ['coffee', 'cafe', 'قهوه', 'كافي', 'خهوه', 'خوه'],
       'Food': [
         'food',
         'lunch',
@@ -324,6 +340,7 @@ class VoiceExpenseParser {
         'breakfast',
         'groceries',
         'غداء',
+        'غداه',
         'عشاء',
         'فطور',
         'اكل',

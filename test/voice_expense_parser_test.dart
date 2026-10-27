@@ -42,6 +42,22 @@ void main() {
       120,
     );
   });
+  test('understands Arabic preposition prefixes and recognizer variants', () {
+    final coffee = VoiceExpenseParser.parse('خهوة بعشرين ريالاً', now: now);
+    expect(coffee.title, 'خهوة');
+    expect(coffee.amount, 20);
+    expect(coffee.currency, 'YER');
+    expect(coffee.category, 'Coffee');
+    expect(coffee.canApply, isTrue);
+
+    final lunch = VoiceExpenseParser.parse('غداء بخمسة دولارات', now: now);
+    expect(lunch.amount, 5);
+    expect(lunch.currency, 'USD');
+    expect(lunch.category, 'Food');
+    expect(lunch.canApply, isTrue);
+
+    expect(VoiceExpenseParser.parse('قهوة 20 بالريال').currency, 'YER');
+  });
   test('rejects subtraction, refunds, income, and negative numbers', () {
     for (final phrase in [
       'وفاء ناقص 300',

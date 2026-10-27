@@ -13,7 +13,7 @@ class ExpenseState {
     this.budgetCents = 50000,
     this.autoApplyRecurring = false,
     this.requireBiometric = false,
-    this.voiceLocale = '',
+    this.voiceLocale = 'ar',
     this.voiceOnDevice = true,
     this.lastBudgetAlertLevel = 0,
     this.budgetAlertPeriod = 0,
@@ -83,7 +83,7 @@ class ExpenseState {
       return raw[key] as bool;
     }
 
-    final locale = raw['voiceLocale'] ?? '';
+    final locale = raw['voiceLocale'] ?? 'ar';
     if (locale is! String || locale.length > 80) {
       throw const FormatException('Invalid speech language.');
     }
@@ -95,7 +95,7 @@ class ExpenseState {
       budgetCents: budget,
       autoApplyRecurring: flag('autoApplyRecurring', false),
       requireBiometric: flag('requireBiometric', false),
-      voiceLocale: locale,
+      voiceLocale: locale.trim().isEmpty ? 'ar' : locale,
       voiceOnDevice: flag('voiceOnDevice', true),
       lastBudgetAlertLevel: raw['lastBudgetAlertLevel'] is int
           ? raw['lastBudgetAlertLevel'] as int

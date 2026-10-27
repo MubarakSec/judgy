@@ -64,36 +64,45 @@ class _VoiceEntryPanelState extends State<VoiceEntryPanel>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.hidden) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
       unawaited(_voice.cancel());
     }
   }
 
-  Future<void> _preferences({String? locale, bool? onDevice}) async {
+  Future<void> _preferences({String? locale}) async {
     final provider = context.read<ExpenseProvider>();
     await _voice.cancel();
     final saved = await provider.setVoicePreferences(
       locale: locale ?? provider.voiceLocale,
-      onDevice: onDevice ?? provider.voiceOnDevice,
+      onDevice: provider.voiceOnDevice,
     );
-    if (mounted) {
-      setState(() => _settingsError = saved ? null : provider.errorMessage);
-    }
+    if (!mounted) return;
+    setState(() => _settingsError = saved ? null : provider.errorMessage);
+    if (saved) _start();
   }
 
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<ExpenseProvider>();
-    final busy = _voice.isStarting || _voice.isListening;
+    final busy =
+        _voice.isStarting || _voice.isListening || _voice.isTranscribing;
     final draft = _voice.transcript.trim().isEmpty
         ? null
         : VoiceExpenseParser.parse(_voice.transcript, now: provider.now);
     final currency =
         _chosenCurrency ?? draft?.currency ?? (provider.isUSD ? 'USD' : 'YER');
-    final locales = [..._voice.locales]
-      ..sort((a, b) => a.name.compareTo(b.name));
-    final locale = locales.any((l) => l.localeId == provider.voiceLocale)
-        ? provider.voiceLocale
+    final localeId = provider.voiceLocale
+        .trim()
+        .toLowerCase()
+        .replaceAll('-', '_')
+        .split('_')
+        .first;
+    final selectedLocale =
+        VoiceInputController.languages.any(
+          (language) => language.id == localeId,
+        )
+        ? localeId
         : '';
     return Container(
       key: const ValueKey('voice-review'),
@@ -111,7 +120,11 @@ class _VoiceEntryPanelState extends State<VoiceEntryPanel>
             children: [
               Expanded(
                 child: Text(
-                  _voice.isListening ? 'Listening…' : 'Voice entry',
+                  _voice.isTranscribing
+                      ? 'Transcribing…'
+                      : _voice.isListening
+                      ? 'Listening…'
+                      : 'Voice entry',
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
               ),
@@ -128,44 +141,35 @@ class _VoiceEntryPanelState extends State<VoiceEntryPanel>
             ],
           ),
           Text(
-            provider.voiceOnDevice
-                ? 'On-device recognition · review before applying'
-                : 'Your phone’s speech service may process audio online.',
+            'Private on-device recognition · review before applying',
             style: Theme.of(context).textTheme.bodySmall,
           ),
+          if (_voice.isStarting || _voice.isTranscribing) ...[
+            const SizedBox(height: AppSpacing.sm),
+            const LinearProgressIndicator(minHeight: 2),
+          ],
           if (_showOptions) ...[
             const SizedBox(height: AppSpacing.sm),
             DropdownButtonFormField<String>(
-              key: ValueKey(locale),
-              initialValue: locale,
+              key: ValueKey(selectedLocale),
+              initialValue: selectedLocale,
               isExpanded: true,
               decoration: const InputDecoration(labelText: 'Speech language'),
               items: [
-                const DropdownMenuItem(
-                  value: '',
-                  child: Text('Device language'),
-                ),
-                ...locales.map(
-                  (l) => DropdownMenuItem(
-                    value: l.localeId,
-                    child: Text(l.name, overflow: TextOverflow.ellipsis),
+                for (final language in VoiceInputController.languages)
+                  DropdownMenuItem(
+                    value: language.id,
+                    child: Text(language.name),
                   ),
-                ),
               ],
               onChanged: provider.isSaving
                   ? null
                   : (value) => _preferences(locale: value),
             ),
-            SwitchListTile.adaptive(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('On-device only'),
-              subtitle: const Text(
-                'Needs an installed offline speech pack. No automatic online fallback.',
-              ),
-              value: provider.voiceOnDevice,
-              onChanged: provider.isSaving
-                  ? null
-                  : (value) => _preferences(onDevice: value),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'Whisper base · offline model bundled with the app',
+              style: Theme.of(context).textTheme.bodySmall,
             ),
           ],
           const SizedBox(height: AppSpacing.sm),
@@ -173,7 +177,11 @@ class _VoiceEntryPanelState extends State<VoiceEntryPanel>
             liveRegion: true,
             child: Text(
               _voice.transcript.isEmpty
-                  ? 'Try “قهوة عشرين ريال” or “coffee four dollars”.'
+                  ? _voice.isListening
+                        ? 'Speak now, then tap Stop.'
+                        : _voice.isTranscribing
+                        ? 'Working locally on this phone…'
+                        : 'Tap Try again and speak. Try “قهوة عشرين ريال” or “coffee four dollars”.'
                   : _voice.transcript,
               textDirection:
                   RegExp(r'[\u0600-\u06FF]').hasMatch(_voice.transcript)
@@ -241,18 +249,22 @@ class _VoiceEntryPanelState extends State<VoiceEntryPanel>
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: _voice.isStarting
+                  onPressed: _voice.isStarting || _voice.isTranscribing
                       ? null
-                      : busy
+                      : _voice.isListening
                       ? _voice.stop
                       : _start,
                   icon: Icon(
-                    busy ? Icons.stop_rounded : Icons.mic_none_rounded,
+                    _voice.isListening
+                        ? Icons.stop_rounded
+                        : Icons.mic_none_rounded,
                   ),
                   label: Text(
                     _voice.isStarting
                         ? 'Starting…'
-                        : busy
+                        : _voice.isTranscribing
+                        ? 'Transcribing…'
+                        : _voice.isListening
                         ? 'Stop'
                         : 'Try again',
                   ),

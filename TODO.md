@@ -29,9 +29,10 @@
 
 ## Upgrade validation
 - [x] Search-integrated sorting and scrollable compact home layout.
-- [x] Arabic/English voice number words, explicit currency, transcript review, and recognizer lifecycle.
-- [x] Strict on-device capability check; optional online speech is disclosed.
+- [x] Arabic/English voice number words, explicit currency, transcript review, and record-then-transcribe lifecycle.
+- [x] Fully offline Whisper recognition with a bundled model; no system speech service or online audio.
 - [x] Import validation, atomic recurring application, reset protection, and CSV note preservation.
 - [x] Device lock gates loading, sheets, dialogs, and quick-add navigation.
-- [ ] Real Android device pass: recognition/dialects, offline packs, unlock, file/share pickers, notifications.
+- [ ] Real Android device pass: recognition/dialects, offline model loading, unlock, file/share pickers, notifications.
+- [ ] Voice accuracy: base Whisper mishears Arabic names/dialects on short clips; evaluate `ggml-small-q5_1` and keep short audio/auto-stop tuning.
 - [ ] Full Arabic UI localization, configurable category management, and a light theme.

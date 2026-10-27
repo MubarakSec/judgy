@@ -17,8 +17,10 @@ track a monthly budget, and view totals in USD or Yemeni riyals (YER).
 
 ## Voice entry
 
-Tap the microphone in the expense name field. Voice options let you choose an
-installed speech language and whether online recognition is allowed. Examples:
+Tap the microphone in the expense name field. Recognition runs fully offline with
+a bundled multilingual Whisper model and does not use the phone's speech service.
+Choose **Arabic** (the default), **English**, or experimental **Auto detect** in the
+voice options. Examples:
 
 - `قهوة مئتين وخمسين ريال أمس`
 - `coffee twenty five point five dollars yesterday`
@@ -29,13 +31,18 @@ Review the transcript, amount, currency, date, and suggested category, then tap
 ambiguous amounts, mixed currencies, income, and refund/subtraction commands are
 blocked instead of silently becoming positive expenses. Judgy currently records
 spending, not income or balances owed by people. Number-word support covers common
-Arabic/English forms and needs device/dialect testing; it is not unrestricted
+Arabic/English forms and needs dialect testing; it is not unrestricted
 natural-language understanding.
 
-On-device mode is the default. Strict offline recognition requires Android 12+
-with an available on-device recognizer and the appropriate language pack. If it is
-unavailable, the app shows an error. Turning it off explicitly permits the phone's
-speech service to process audio online. No cloud AI service is added by Judgy.
+The model is `ggml-base-q5_1.bin` (about 57 MB, multilingual). It is not committed
+to git; fetch it once with `tool/fetch_whisper_model.sh` before building. The app
+copies the bundled model into private app storage on first use. Audio never leaves
+the device, and no cloud AI service is used.
+
+The base model is fast and compact, but its Arabic accuracy is limited — especially
+for names, dialects, and short phrases. Auto language detection is also unreliable
+on short clips, so Arabic is the default. A larger Whisper small model is the next
+quality step; it needs a device test and a bigger bundled download.
 
 ## Storage, privacy, and recovery
 
@@ -59,6 +66,7 @@ speech service to process audio online. No cloud AI service is added by Judgy.
 ## Development
 
 ```sh
+tool/fetch_whisper_model.sh
 flutter pub get
 flutter analyze --no-pub
 flutter test --no-pub --concurrency=1
@@ -67,12 +75,14 @@ flutter run
 
 Tests cover voice parsing/lifecycle, imports, failed writes, SQLite migration and
 transaction rollback, recurring concurrency/month-end rules, device-lock loading,
-notification navigation, and compact/large-text interactions. Native microphone,
-biometrics, file/share pickers, and notification behavior still require a real phone.
+notification navigation, and compact/large-text interactions. The offline model
+loader is exercised on a phone; microphone, biometrics, file/share pickers, and
+notification behavior still require a real phone.
 
 ## Release signing
 
 Copy `android/key.properties.example` to the ignored `android/key.properties` and
 configure your private keystore. Release packaging requires signing credentials;
-it does not fall back to debug signing. Do not commit keys or passwords. This
-upgrade was validated without building an APK or running Gradle on the VPS.
+it does not fall back to debug signing. Do not commit keys or passwords. Local
+device testing uses the gitignored debug-keystore configuration; replace it with a
+private release keystore before distributing the app.

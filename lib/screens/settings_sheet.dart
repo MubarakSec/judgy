@@ -327,7 +327,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
               const Padding(
                 padding: EdgeInsets.only(bottom: AppSpacing.md),
                 child: Text(
-                  'Expense records stay on this device. Voice uses on-device recognition by default; online processing is optional in voice settings.',
+                  'Expense records stay on this device. Voice recognition runs entirely offline using a bundled Whisper model.',
                 ),
               ),
             ],
