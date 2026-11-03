@@ -9,6 +9,7 @@ import '../theme/app_theme.dart';
 import '../utils/currency_formatter.dart';
 import '../utils/expense_categories.dart';
 import '../widgets/app_sheet.dart';
+import '../widgets/quick_entry_strip.dart';
 
 class AddExpenseSheet extends StatefulWidget {
   const AddExpenseSheet({
@@ -40,6 +41,7 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
   late String _entryCurrency;
   String? _initialAmountText;
   String? _initialCurrency;
+  String? _selectedQuickEntryId;
 
   @override
   void initState() {
@@ -52,6 +54,7 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
         : expense?.date ?? provider.now;
     _entryCurrency = provider.isUSD ? 'USD' : 'YER';
     if (expense != null) {
+      if (widget.suggestion != null) _selectedQuickEntryId = expense.id;
       _type = expense.type;
       _titleController.text = expense.title;
       _noteController.text = widget.suggestion == null
@@ -72,6 +75,32 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
       _initialAmountText = _amountController.text;
       _initialCurrency = _entryCurrency;
     }
+  }
+
+  void _useQuickEntry(Expense entry) {
+    if (_isSubmitting) return;
+    final provider = context.read<ExpenseProvider>();
+    final original = entry.originalCurrency;
+    final currency = original == 'USD' || original == 'YER'
+        ? original!
+        : (provider.isUSD ? 'USD' : 'YER');
+    final amount = original == currency && entry.originalAmount != null
+        ? entry.originalAmount!
+        : currency == 'USD'
+        ? entry.amount
+        : entry.amount * provider.exchangeRate;
+    setState(() {
+      _selectedQuickEntryId = entry.id;
+      _type = entry.type;
+      _selectedCategory = entry.category;
+      _entryCurrency = currency;
+      _selectedDate = provider.now;
+      _showDetails = false;
+      _titleController.text = entry.title;
+      _amountController.text = amount.toStringAsFixed(2);
+      _noteController.clear();
+      _submitError = null;
+    });
   }
 
   @override
@@ -172,6 +201,40 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
           ? 'Duplicate transaction'
           : 'Edit transaction',
       closeLabel: 'Close transaction form',
+      footer: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_submitError != null) ...[
+            Semantics(
+              liveRegion: true,
+              child: Text(
+                _submitError!,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: AppColors.danger),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+          ],
+          FilledButton.icon(
+            onPressed: _isSubmitting ? null : _submitData,
+            icon: _isSubmitting
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.check),
+            label: Text(
+              _isSubmitting
+                  ? 'Saving…'
+                  : _type == 'income'
+                  ? 'Save income'
+                  : 'Save expense',
+            ),
+          ),
+        ],
+      ),
       child: Form(
         key: _formKey,
         autovalidateMode: AutovalidateMode.onUserInteraction,
@@ -179,6 +242,13 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (widget.expense == null && provider.quickEntries.isNotEmpty) ...[
+              QuickEntryStrip(
+                selectedId: _selectedQuickEntryId,
+                onSelected: _useQuickEntry,
+              ),
+              const SizedBox(height: AppSpacing.lg),
+            ],
             SegmentedButton<String>(
               segments: const [
                 ButtonSegment(
@@ -335,35 +405,6 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
                 maxLines: 2,
               ),
             ],
-            if (_submitError != null) ...[
-              const SizedBox(height: AppSpacing.md),
-              Semantics(
-                liveRegion: true,
-                child: Text(
-                  _submitError!,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyMedium?.copyWith(color: AppColors.danger),
-                ),
-              ),
-            ],
-            const SizedBox(height: AppSpacing.md),
-            FilledButton.icon(
-              onPressed: _isSubmitting ? null : _submitData,
-              icon: _isSubmitting
-                  ? const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.check),
-              label: Text(
-                _isSubmitting
-                    ? 'Saving…'
-                    : _type == 'income'
-                    ? 'Save income'
-                    : 'Save expense',
-              ),
-            ),
           ],
         ),
       ),

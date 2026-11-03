@@ -8,6 +8,7 @@ import '../theme/app_theme.dart';
 import '../widgets/expense_tile.dart';
 import '../widgets/time_filter_tabs.dart';
 import '../widgets/total_spent_card.dart';
+import '../widgets/quick_entry_strip.dart';
 import '../models/expense.dart';
 import '../utils/currency_formatter.dart';
 import '../services/quick_add_notifications.dart';
@@ -328,35 +329,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         if (query.isEmpty &&
                             provider.quickEntries.isNotEmpty) ...[
                           const SizedBox(height: AppSpacing.md),
-                          Text(
-                            'Add again',
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                          const SizedBox(height: AppSpacing.xs),
-                          SizedBox(
-                            height: 46,
-                            child: ListView.separated(
-                              scrollDirection: Axis.horizontal,
-                              itemCount: provider.quickEntries.length,
-                              separatorBuilder: (_, _) =>
-                                  const SizedBox(width: AppSpacing.xs),
-                              itemBuilder: (_, index) {
-                                final entry = provider.quickEntries[index];
-                                return ActionChip(
-                                  avatar: Icon(
-                                    entry.isIncome
-                                        ? Icons.arrow_downward
-                                        : Icons.add,
-                                    size: 17,
-                                  ),
-                                  label: Text(entry.title),
-                                  onPressed: () => _openAddExpense(
-                                    context,
-                                    suggestion: entry,
-                                  ),
-                                );
-                              },
-                            ),
+                          QuickEntryStrip(
+                            onSelected: (entry) =>
+                                _openAddExpense(context, suggestion: entry),
                           ),
                         ],
                         const SizedBox(height: AppSpacing.md),

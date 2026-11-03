@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../providers/expense_provider.dart';
 import '../services/backup_files.dart';
 import '../services/local_snapshots.dart';
+import '../services/quick_add_notifications.dart';
 import '../theme/app_theme.dart';
 import '../utils/currency_formatter.dart';
 import '../widgets/app_sheet.dart';
@@ -92,6 +93,20 @@ class _SettingsSheetState extends State<SettingsSheet> {
       p,
     );
     if (mounted) Navigator.of(context).pop(true);
+  });
+
+  Future<void> _setQuickAddNotification(bool enabled) => _run(() async {
+    final provider = context.read<ExpenseProvider>();
+    _requireSaved(
+      await provider.setShowQuickAddNotification(enabled),
+      provider,
+    );
+    final applied = await QuickAddNotifications.syncQuickAdd(enabled);
+    if (enabled && !applied) {
+      _message(
+        'Allow Judgy notifications in Android settings to use quick add.',
+      );
+    }
   });
 
   Future<bool> _confirm(String title, String message, String action) async =>
@@ -309,6 +324,23 @@ class _SettingsSheetState extends State<SettingsSheet> {
             label: Text(_busy ? 'Working…' : 'Save settings'),
           ),
           const SizedBox(height: AppSpacing.lg),
+          ExpansionTile(
+            tilePadding: EdgeInsets.zero,
+            leading: const Icon(Icons.add_circle_outline),
+            title: const Text('Quick add'),
+            subtitle: const Text('Access the entry sheet from notifications'),
+            children: [
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Keep quick add in notifications'),
+                subtitle: const Text(
+                  'Tap it to add over your current app. Turn it off to clear the notification.',
+                ),
+                value: p.showQuickAddNotification,
+                onChanged: disabled ? null : _setQuickAddNotification,
+              ),
+            ],
+          ),
           ExpansionTile(
             tilePadding: EdgeInsets.zero,
             leading: const Icon(Icons.shield_outlined),

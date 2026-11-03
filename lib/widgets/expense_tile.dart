@@ -9,7 +9,7 @@ import '../theme/app_theme.dart';
 import '../utils/currency_formatter.dart';
 import '../utils/expense_categories.dart';
 
-enum _ExpenseAction { edit, duplicate, delete }
+enum _ExpenseAction { edit, duplicate, pin, delete }
 
 class ExpenseTile extends StatelessWidget {
   const ExpenseTile({super.key, required this.expense});
@@ -89,9 +89,33 @@ class ExpenseTile extends StatelessWidget {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  Future<void> _togglePin(
+    BuildContext context,
+    ExpenseProvider provider,
+    bool wasPinned,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final saved = await provider.toggleQuickEntryPin(expense.id);
+    if (!messenger.mounted) return;
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          saved
+              ? wasPinned
+                    ? 'Removed from quick add.'
+                    : 'Pinned to quick add.'
+              : provider.errorMessage ?? 'Quick entry could not be changed.',
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = context.read<ExpenseProvider>();
+    final pinned = context.select<ExpenseProvider, bool>(
+      (p) => p.isQuickEntryPinned(expense.id),
+    );
     final isUSD = context.select<ExpenseProvider, bool>((p) => p.isUSD);
     final exchangeRate = context.select<ExpenseProvider, double>(
       (p) => p.exchangeRate,
@@ -254,12 +278,14 @@ class ExpenseTile extends StatelessWidget {
                     _edit(context);
                   } else if (action == _ExpenseAction.duplicate) {
                     _duplicate(context);
+                  } else if (action == _ExpenseAction.pin) {
+                    _togglePin(context, provider, pinned);
                   } else if (action == _ExpenseAction.delete) {
                     _delete(context, provider);
                   }
                 },
-                itemBuilder: (context) => const [
-                  PopupMenuItem(
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
                     value: _ExpenseAction.edit,
                     child: Row(
                       children: [
@@ -269,7 +295,7 @@ class ExpenseTile extends StatelessWidget {
                       ],
                     ),
                   ),
-                  PopupMenuItem(
+                  const PopupMenuItem(
                     value: _ExpenseAction.duplicate,
                     child: Row(
                       children: [
@@ -280,6 +306,24 @@ class ExpenseTile extends StatelessWidget {
                     ),
                   ),
                   PopupMenuItem(
+                    value: _ExpenseAction.pin,
+                    child: Row(
+                      children: [
+                        Icon(
+                          pinned
+                              ? Icons.push_pin_rounded
+                              : Icons.push_pin_outlined,
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Flexible(
+                          child: Text(
+                            pinned ? 'Unpin quick entry' : 'Pin to quick add',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
                     value: _ExpenseAction.delete,
                     child: Row(
                       children: [

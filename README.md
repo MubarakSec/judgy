@@ -11,7 +11,9 @@ track a monthly spending budget, and view totals in USD or Yemeni riyals (YER).
   templates are in the top-bar overflow menu.
 - Edit, duplicate, annotate, and undo deleted transactions. Each entry has its own
   currency; changing the display currency does not change saved amounts.
-- Use **Add again** shortcuts for frequent entries. They prefill the form for review.
+- Use **Use again** shortcuts in the home screen or notification sheet. They
+  prefill the amount, currency, category, and name for review. Pin any transaction
+  from its menu to keep it at the front of quick add.
 - A basic entry needs a name and amount. Date and note stay under **Date and note**;
   the keyboard's Done action saves a valid entry.
 - Mark an entry as **Spent** or **Received**. The home card shows both flows and
@@ -20,7 +22,8 @@ track a monthly spending budget, and view totals in USD or Yemeni riyals (YER).
   Days 29–31 clamp to month end. Auto-apply checks on launch, resume, and enabling;
   it applies the current month, without backfilling missed months.
 - On Android, tapping the persistent Quick add notification opens the entry sheet
-  over the current app. Saving or dismissing it returns to that app.
+  over the current app. Saving or dismissing it returns to that app. Settings →
+  Quick add can turn the notification off.
 
 ## Storage, privacy, and recovery
 

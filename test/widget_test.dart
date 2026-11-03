@@ -176,7 +176,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(ActionChip, 'Coffee'));
+    await tester.tap(find.byKey(const ValueKey('quick-entry-old-coffee')));
     await tester.pumpAndSettle();
     expect(find.text('Add again'), findsWidgets);
     expect(
@@ -190,6 +190,32 @@ void main() {
     expect(provider.expenses, hasLength(2));
     expect(provider.expenses.first.date, DateTime(2026, 7, 12, 12));
     expect(provider.expenses.first.category, 'Coffee');
+  });
+
+  testWidgets('transaction menu pins and unpins a quick entry', (tester) async {
+    final provider = await pumpApp(tester);
+    await provider.addExpense(
+      Expense(
+        id: 'bus',
+        title: 'Bus',
+        amountCents: 250,
+        date: DateTime(2026, 7, 12, 9),
+        category: 'Transport',
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('More actions for Bus'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Pin to quick add'));
+    await tester.pumpAndSettle();
+    expect(provider.isQuickEntryPinned('bus'), isTrue);
+    expect(find.byKey(const ValueKey('quick-entry-bus')), findsOneWidget);
+
+    await tester.tap(find.byTooltip('More actions for Bus'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Unpin quick entry'));
+    await tester.pumpAndSettle();
+    expect(provider.isQuickEntryPinned('bus'), isFalse);
   });
 
   testWidgets('compact-height layout remains scrollable without overflow', (

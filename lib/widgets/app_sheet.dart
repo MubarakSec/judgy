@@ -9,11 +9,13 @@ class AppSheet extends StatelessWidget {
     required this.child,
     this.subtitle,
     this.closeLabel = 'Close',
+    this.footer,
   });
 
   final String title;
   final String? subtitle;
   final String closeLabel;
+  final Widget? footer;
   final Widget child;
 
   @override
@@ -37,68 +39,89 @@ class AppSheet extends StatelessWidget {
             minimum: const EdgeInsets.only(bottom: AppSpacing.lg),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 640),
-              child: SingleChildScrollView(
-                keyboardDismissBehavior:
-                    ScrollViewKeyboardDismissBehavior.onDrag,
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.lg,
-                  AppSpacing.sm,
-                  AppSpacing.lg,
-                  0,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 36,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: AppColors.border,
-                          borderRadius: BorderRadius.circular(99),
-                        ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    fit: FlexFit.loose,
+                    child: SingleChildScrollView(
+                      keyboardDismissBehavior:
+                          ScrollViewKeyboardDismissBehavior.onDrag,
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.lg,
+                        AppSpacing.sm,
+                        AppSpacing.lg,
+                        0,
                       ),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Column(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Center(
+                            child: Container(
+                              width: 36,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: AppColors.border,
+                                borderRadius: BorderRadius.circular(99),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.md),
+                          Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                title,
-                                style: Theme.of(
-                                  context,
-                                ).textTheme.headlineMedium,
-                              ),
-                              if (subtitle != null) ...[
-                                const SizedBox(height: AppSpacing.xs),
-                                Text(
-                                  subtitle!,
-                                  style: Theme.of(context).textTheme.bodyLarge
-                                      ?.copyWith(
-                                        color: AppColors.textSecondary,
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      title,
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.headlineMedium,
+                                    ),
+                                    if (subtitle != null) ...[
+                                      const SizedBox(height: AppSpacing.xs),
+                                      Text(
+                                        subtitle!,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodyLarge
+                                            ?.copyWith(
+                                              color: AppColors.textSecondary,
+                                            ),
                                       ),
+                                    ],
+                                  ],
                                 ),
-                              ],
+                              ),
+                              const SizedBox(width: AppSpacing.sm),
+                              IconButton(
+                                onPressed: () =>
+                                    Navigator.of(context).maybePop(),
+                                tooltip: closeLabel,
+                                icon: const Icon(Icons.close),
+                              ),
                             ],
                           ),
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                        IconButton(
-                          onPressed: () => Navigator.of(context).maybePop(),
-                          tooltip: closeLabel,
-                          icon: const Icon(Icons.close),
-                        ),
-                      ],
+                          const SizedBox(height: AppSpacing.lg),
+                          child,
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: AppSpacing.lg),
-                    child,
-                  ],
-                ),
+                  ),
+                  if (footer != null)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.lg,
+                        AppSpacing.sm,
+                        AppSpacing.lg,
+                        0,
+                      ),
+                      child: footer!,
+                    ),
+                ],
               ),
             ),
           ),
