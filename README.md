@@ -5,8 +5,9 @@ track a monthly spending budget, and view totals in USD or Yemeni riyals (YER).
 
 ## Daily use
 
-- Search titles, notes, categories, and displayed amounts. Use the sort icon inside
-  search to order by date, amount, or name.
+- Filter the list to all, spent, or received transactions. Search titles, notes,
+  categories, and displayed amounts. Sort by date, amount, or name; date order
+  groups entries by day. The period summary stays complete while filtering the list.
 - Filter by day, week, month, or a custom date range. Insights and recurring
   templates are in the top-bar overflow menu.
 - Edit, duplicate, annotate, and undo deleted transactions. Each entry has its own

@@ -10,7 +10,7 @@ import '../widgets/time_filter_tabs.dart';
 import '../widgets/total_spent_card.dart';
 import '../widgets/quick_entry_strip.dart';
 import '../models/expense.dart';
-import '../utils/currency_formatter.dart';
+import '../models/transaction_browser.dart';
 import '../services/quick_add_notifications.dart';
 import '../widgets/app_lock_gate.dart';
 import 'add_expense_sheet.dart';
@@ -34,7 +34,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _addSheetOpen = false;
   late final ExpenseProvider _provider;
   String _searchQuery = '';
-  String _sortMode = 'Date';
+  TransactionSort _sortMode = TransactionSort.newest;
+  TransactionKind _kind = TransactionKind.all;
 
   @override
   void dispose() {
@@ -185,40 +186,68 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
+  Widget _buildSearch() => TextField(
+    controller: _searchController,
+    textInputAction: TextInputAction.search,
+    decoration: InputDecoration(
+      hintText: 'Search transactions',
+      prefixIcon: const Icon(Icons.search_rounded),
+      suffixIcon: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_searchQuery.isNotEmpty)
+            IconButton(
+              tooltip: 'Clear search',
+              icon: const Icon(Icons.close, size: 20),
+              onPressed: () => setState(() {
+                _searchQuery = '';
+                _searchController.clear();
+              }),
+            ),
+          PopupMenuButton<TransactionSort>(
+            tooltip: 'Sort transactions',
+            initialValue: _sortMode,
+            icon: Icon(
+              Icons.sort_rounded,
+              color: _sortMode == TransactionSort.newest
+                  ? AppColors.textSecondary
+                  : AppColors.accent,
+            ),
+            onSelected: (value) => setState(() => _sortMode = value),
+            itemBuilder: (_) => [
+              for (final entry in const {
+                TransactionSort.newest: 'Newest first',
+                TransactionSort.highestAmount: 'Highest amount',
+                TransactionSort.name: 'Name A–Z',
+              }.entries)
+                CheckedPopupMenuItem(
+                  value: entry.key,
+                  checked: _sortMode == entry.key,
+                  child: Text(entry.value),
+                ),
+            ],
+          ),
+        ],
+      ),
+    ),
+    onChanged: (value) => setState(() => _searchQuery = value),
+  );
+
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<ExpenseProvider>();
     if (!_ready) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-    final filtered = provider.filteredExpenses;
-    final query = _searchQuery.trim().toLowerCase();
-    final visibleExpenses = query.isEmpty
-        ? filtered
-        : filtered
-              .where(
-                (expense) =>
-                    expense.title.toLowerCase().contains(query) ||
-                    expense.category.toLowerCase().contains(query) ||
-                    (expense.note?.toLowerCase().contains(query) ?? false) ||
-                    CurrencyFormatter.displayFromUsdCents(
-                      usdCents: expense.amountCents,
-                      isUsd: provider.isUSD,
-                      exchangeRate: provider.exchangeRate,
-                    ).toLowerCase().contains(query),
-              )
-              .toList(growable: false);
-    final sortedExpenses = List<Expense>.from(visibleExpenses);
-    switch (_sortMode) {
-      case 'Amount':
-        sortedExpenses.sort((a, b) => b.amountCents.compareTo(a.amountCents));
-        break;
-      case 'Title':
-        sortedExpenses.sort((a, b) => a.title.compareTo(b.title));
-        break;
-      default:
-        sortedExpenses.sort((a, b) => b.date.compareTo(a.date));
-    }
+    final query = _searchQuery.trim();
+    final browse = TransactionBrowser.browse(
+      source: provider.filteredExpenses,
+      kind: _kind,
+      sort: _sortMode,
+      query: query,
+      isUsd: provider.isUSD,
+      exchangeRate: provider.exchangeRate,
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -262,55 +291,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       children: [
                         const SizedBox(height: AppSpacing.xs),
                         const TimeFilterTabs(),
-                        const SizedBox(height: AppSpacing.sm),
-                        TextField(
-                          controller: _searchController,
-                          textInputAction: TextInputAction.search,
-                          decoration: InputDecoration(
-                            hintText: 'Search transactions',
-                            prefixIcon: const Icon(Icons.search_rounded),
-                            suffixIcon: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                if (_searchQuery.isNotEmpty)
-                                  IconButton(
-                                    tooltip: 'Clear search',
-                                    icon: const Icon(Icons.close, size: 20),
-                                    onPressed: () => setState(() {
-                                      _searchQuery = '';
-                                      _searchController.clear();
-                                    }),
-                                  ),
-                                PopupMenuButton<String>(
-                                  tooltip: 'Sort transactions',
-                                  initialValue: _sortMode,
-                                  icon: Icon(
-                                    Icons.sort_rounded,
-                                    color: _sortMode == 'Date'
-                                        ? AppColors.textSecondary
-                                        : AppColors.accent,
-                                  ),
-                                  onSelected: (value) =>
-                                      setState(() => _sortMode = value),
-                                  itemBuilder: (_) => [
-                                    for (final entry in const {
-                                      'Date': 'Newest first',
-                                      'Amount': 'Highest amount',
-                                      'Title': 'Name A–Z',
-                                    }.entries)
-                                      CheckedPopupMenuItem(
-                                        value: entry.key,
-                                        checked: _sortMode == entry.key,
-                                        child: Text(entry.value),
-                                      ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                          onChanged: (value) =>
-                              setState(() => _searchQuery = value),
-                        ),
                         if (provider.errorMessage != null ||
                             provider.warningMessage != null) ...[
                           const SizedBox(height: AppSpacing.md),
@@ -339,22 +319,49 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           children: [
                             Expanded(
                               child: Text(
-                                'Recent transactions',
+                                'Transactions',
                                 style: Theme.of(context).textTheme.titleLarge,
                               ),
                             ),
+                            Text(
+                              '${browse.entries.length}',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
                             IconButton(
                               tooltip: 'Insights',
                               onPressed: () => _openInsights(context),
                               icon: const Icon(Icons.insights_outlined),
                             ),
                             IconButton(
-                              tooltip: 'Recurring expenses',
+                              tooltip: 'Recurring transactions',
                               onPressed: () => _openRecurring(context),
                               icon: const Icon(Icons.repeat_outlined),
                             ),
                           ],
                         ),
+                        SegmentedButton<TransactionKind>(
+                          showSelectedIcon: false,
+                          segments: const [
+                            ButtonSegment(
+                              value: TransactionKind.all,
+                              label: Text('All'),
+                            ),
+                            ButtonSegment(
+                              value: TransactionKind.spent,
+                              label: Text('Spent'),
+                            ),
+                            ButtonSegment(
+                              value: TransactionKind.received,
+                              label: Text('Received'),
+                            ),
+                          ],
+                          selected: {_kind},
+                          onSelectionChanged: (selection) =>
+                              setState(() => _kind = selection.first),
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        _buildSearch(),
                         const SizedBox(height: AppSpacing.xs),
                       ],
                     ),
@@ -364,23 +371,42 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   padding: const EdgeInsets.symmetric(
                     horizontal: AppSpacing.lg,
                   ),
-                  sliver: sortedExpenses.isEmpty
+                  sliver: browse.entries.isEmpty
                       ? SliverFillRemaining(
                           hasScrollBody: false,
                           child: _EmptyState(
                             hasAnyExpenses: provider.expenses.isNotEmpty,
-                            period: query.isEmpty
-                                ? provider.timeFilter.toLowerCase()
-                                : 'matching "$_searchQuery"',
+                            message: query.isNotEmpty
+                                ? 'No matches for "$query"'
+                                : switch (_kind) {
+                                    TransactionKind.spent => 'No spending here',
+                                    TransactionKind.received =>
+                                      'No received money here',
+                                    TransactionKind.all =>
+                                      switch (provider.timeFilter) {
+                                        'Day' => 'Nothing logged today',
+                                        'Week' => 'Nothing logged this week',
+                                        'Custom' =>
+                                          'Nothing logged in this range',
+                                        _ => 'Nothing logged this month',
+                                      },
+                                  },
                           ),
                         )
                       : SliverList.builder(
-                          itemCount: sortedExpenses.length,
-                          itemBuilder: (_, index) =>
-                              ExpenseTile(expense: sortedExpenses[index]),
+                          itemCount: browse.rows.length,
+                          itemBuilder: (_, index) {
+                            final row = browse.rows[index];
+                            if (row is TransactionDayRow) {
+                              return _DayHeader(row: row);
+                            }
+                            return ExpenseTile(
+                              expense: (row as TransactionEntryRow).entry,
+                            );
+                          },
                         ),
                 ),
-                if (sortedExpenses.isNotEmpty)
+                if (browse.entries.isNotEmpty)
                   const SliverToBoxAdapter(child: SizedBox(height: 104)),
               ],
             ),
@@ -393,6 +419,31 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           : null,
     );
   }
+}
+
+class _DayHeader extends StatelessWidget {
+  const _DayHeader({required this.row});
+
+  final TransactionDayRow row;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(0, AppSpacing.sm, 0, AppSpacing.xs),
+    child: Row(
+      children: [
+        Expanded(
+          child: Text(
+            MaterialLocalizations.of(context).formatMediumDate(row.date),
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+        ),
+        Text(
+          '${row.count} ${row.count == 1 ? 'entry' : 'entries'}',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      ],
+    ),
+  );
 }
 
 class _LoadingHome extends StatelessWidget {
@@ -483,10 +534,10 @@ class _StatusNotice extends StatelessWidget {
 }
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.hasAnyExpenses, required this.period});
+  const _EmptyState({required this.hasAnyExpenses, required this.message});
 
   final bool hasAnyExpenses;
-  final String period;
+  final String message;
 
   @override
   Widget build(BuildContext context) {
@@ -520,9 +571,7 @@ class _EmptyState extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.md),
               Text(
-                hasAnyExpenses
-                    ? 'Nothing logged this $period'
-                    : 'Ready when you are',
+                hasAnyExpenses ? message : 'Ready when you are',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.titleLarge,
               ),
