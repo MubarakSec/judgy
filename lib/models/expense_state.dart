@@ -15,6 +15,7 @@ class ExpenseState {
     this.requireBiometric = false,
     this.lastBudgetAlertLevel = 0,
     this.budgetAlertPeriod = 0,
+    this.pinnedQuickEntryIds = const [],
   });
 
   final List<Expense> expenses;
@@ -26,6 +27,7 @@ class ExpenseState {
   final bool requireBiometric;
   final int lastBudgetAlertLevel;
   final int budgetAlertPeriod;
+  final List<String> pinnedQuickEntryIds;
 
   factory ExpenseState.decode(String source) {
     if (utf8.encode(source).length > 10 * 1024 * 1024) {
@@ -73,6 +75,20 @@ class ExpenseState {
       }
       recurring.add(item);
     }
+    final pinnedRaw = raw['pinnedQuickEntryIds'] ?? const [];
+    if (pinnedRaw is! List || pinnedRaw.length > 5) {
+      throw const FormatException('Invalid quick entry pins.');
+    }
+    final pinned = <String>[];
+    final pinnedIds = <String>{};
+    for (final id in pinnedRaw) {
+      if (id is! String ||
+          !expenses.any((e) => e.id == id) ||
+          !pinnedIds.add(id)) {
+        throw const FormatException('Invalid quick entry pin.');
+      }
+      pinned.add(id);
+    }
     bool flag(String key, bool fallback) {
       if (!raw.containsKey(key)) return fallback;
       if (raw[key] is! bool) throw FormatException('Invalid $key.');
@@ -93,6 +109,7 @@ class ExpenseState {
       budgetAlertPeriod: raw['budgetAlertPeriod'] is int
           ? raw['budgetAlertPeriod'] as int
           : 0,
+      pinnedQuickEntryIds: List.unmodifiable(pinned),
     );
   }
 
@@ -107,6 +124,7 @@ class ExpenseState {
     'requireBiometric': requireBiometric,
     'lastBudgetAlertLevel': lastBudgetAlertLevel,
     'budgetAlertPeriod': budgetAlertPeriod,
+    'pinnedQuickEntryIds': pinnedQuickEntryIds,
   };
 
   String encode() => jsonEncode(toMap());
@@ -121,6 +139,7 @@ class ExpenseState {
     bool? requireBiometric,
     int? lastBudgetAlertLevel,
     int? budgetAlertPeriod,
+    List<String>? pinnedQuickEntryIds,
   }) => ExpenseState(
     expenses: expenses == null ? this.expenses : List.unmodifiable(expenses),
     recurring: recurring == null
@@ -133,5 +152,8 @@ class ExpenseState {
     requireBiometric: requireBiometric ?? this.requireBiometric,
     lastBudgetAlertLevel: lastBudgetAlertLevel ?? this.lastBudgetAlertLevel,
     budgetAlertPeriod: budgetAlertPeriod ?? this.budgetAlertPeriod,
+    pinnedQuickEntryIds: pinnedQuickEntryIds == null
+        ? this.pinnedQuickEntryIds
+        : List.unmodifiable(pinnedQuickEntryIds),
   );
 }
