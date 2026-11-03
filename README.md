@@ -21,6 +21,8 @@ track a monthly spending budget, and view totals in USD or Yemeni riyals (YER).
   the net amount; income does not use the spending budget.
 - Set monthly category budgets in Settings. Insights shows the amount left or over
   each limit; category limits count current-month spending and ignore income.
+- Insights compares spending and income across the last six calendar months. Tap
+  a month for exact spent, received, and net totals; empty months stay visible.
 - Save recurring spending or income templates, edit them, and apply each once per
   month, or enable auto-apply for due templates.
   Days 29–31 clamp to month end. Auto-apply checks on launch, resume, and enabling;
