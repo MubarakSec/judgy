@@ -7,6 +7,7 @@ class RecurringExpense {
     required this.amountCents,
     required this.category,
     required this.dayOfMonth,
+    this.type = 'expense',
     this.lastApplied,
   });
 
@@ -15,6 +16,8 @@ class RecurringExpense {
   final int amountCents;
   final String category;
   final int dayOfMonth;
+  final String type;
+  bool get isIncome => type == 'income';
   final DateTime? lastApplied;
 
   void validate() {
@@ -23,6 +26,7 @@ class RecurringExpense {
         category.trim().isEmpty ||
         amountCents <= 0 ||
         amountCents > 9007199254740991 ||
+        (type != 'expense' && type != 'income') ||
         dayOfMonth < 1 ||
         dayOfMonth > 31) {
       throw const FormatException(
@@ -37,6 +41,7 @@ class RecurringExpense {
     'amountCents': amountCents,
     'category': category,
     'dayOfMonth': dayOfMonth,
+    'type': type,
     if (lastApplied != null) 'lastApplied': lastApplied!.toIso8601String(),
   };
 
@@ -47,6 +52,7 @@ class RecurringExpense {
         map['category'] is! String ||
         map['amountCents'] is! int ||
         map['dayOfMonth'] is! int ||
+        (map.containsKey('type') && map['type'] is! String) ||
         (rawLast != null &&
             (rawLast is! String || DateTime.tryParse(rawLast) == null))) {
       throw const FormatException('Invalid recurring expense.');
@@ -57,6 +63,7 @@ class RecurringExpense {
       amountCents: map['amountCents'] as int,
       category: (map['category'] as String).trim(),
       dayOfMonth: map['dayOfMonth'] as int,
+      type: (map['type'] as String?) ?? 'expense',
       lastApplied: rawLast == null ? null : DateTime.parse(rawLast as String),
     );
     result.validate();
@@ -82,6 +89,7 @@ class RecurringExpense {
       amountCents: amountCents,
       category: category,
       dayOfMonth: dayOfMonth,
+      type: type,
       lastApplied: lastApplied ?? this.lastApplied,
     );
   }

@@ -346,6 +346,28 @@ class ExpenseProvider with ChangeNotifier {
     final updated = s.copyWith(recurring: [...s.recurring, item]);
     return s.autoApplyRecurring ? _dueRecurring(updated) : updated;
   });
+  Future<bool> updateRecurring(RecurringExpense item) => _mutate((s) {
+    item.validate();
+    final existing = s.recurring.where((e) => e.id == item.id).firstOrNull;
+    if (existing == null) {
+      throw const FormatException('Recurring template no longer exists.');
+    }
+    final replacement = RecurringExpense(
+      id: item.id,
+      title: item.title,
+      amountCents: item.amountCents,
+      category: item.category,
+      dayOfMonth: item.dayOfMonth,
+      type: item.type,
+      lastApplied: existing.lastApplied,
+    );
+    final updated = s.copyWith(
+      recurring: s.recurring
+          .map((entry) => entry.id == item.id ? replacement : entry)
+          .toList(),
+    );
+    return s.autoApplyRecurring ? _dueRecurring(updated) : updated;
+  });
   Future<bool> removeRecurring(String id) => _mutate(
     (s) => s.copyWith(recurring: s.recurring.where((e) => e.id != id).toList()),
   );
@@ -382,6 +404,7 @@ class ExpenseProvider with ChangeNotifier {
       amountCents: item.amountCents,
       date: DateTime(current.year, current.month, day),
       category: item.category,
+      type: item.type,
     );
     return state.copyWith(
       expenses: _sorted([...state.expenses, expense]),
