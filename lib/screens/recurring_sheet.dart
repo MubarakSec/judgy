@@ -18,20 +18,26 @@ class RecurringSheet extends StatefulWidget {
 }
 
 class _RecurringSheetState extends State<RecurringSheet> {
-  Future<void> _add() async {
+  Future<void> _saveTemplate([RecurringExpense? existing]) async {
     final provider = context.read<ExpenseProvider>();
     final item = await showDialog<RecurringExpense>(
       context: context,
-      builder: (_) =>
-          _RecurringEditor(isUSD: provider.isUSD, rate: provider.exchangeRate),
+      builder: (_) => _RecurringEditor(
+        isUSD: provider.isUSD,
+        rate: provider.exchangeRate,
+        initial: existing,
+      ),
     );
     if (item == null || !mounted) return;
-    final saved = await provider.addRecurring(item);
+    final saved = existing == null
+        ? await provider.addRecurring(item)
+        : await provider.updateRecurring(item);
     if (!saved && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            provider.errorMessage ?? 'Recurring expense could not be saved.',
+            provider.errorMessage ??
+                'Recurring transaction could not be saved.',
           ),
         ),
       );
@@ -43,15 +49,15 @@ class _RecurringSheetState extends State<RecurringSheet> {
     final provider = context.watch<ExpenseProvider>();
 
     return AppSheet(
-      title: 'Recurring expenses',
-      subtitle: 'Monthly spending you can apply once, or add automatically.',
-      closeLabel: 'Close recurring expenses',
+      title: 'Recurring transactions',
+      subtitle: 'Monthly spending and income, added once per month.',
+      closeLabel: 'Close recurring transactions',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('Auto-apply due recurring expenses'),
+            title: const Text('Auto-add due transactions'),
             value: provider.autoApplyRecurring,
             subtitle: const Text(
               'Adds due templates for the current month. Missed months are not backfilled.',
@@ -61,14 +67,14 @@ class _RecurringSheetState extends State<RecurringSheet> {
                 : (value) => provider.setAutoApplyRecurring(value),
           ),
           FilledButton.icon(
-            onPressed: provider.isSaving ? null : _add,
+            onPressed: provider.isSaving ? null : () => _saveTemplate(),
             icon: const Icon(Icons.add),
-            label: const Text('Add recurring expense'),
+            label: const Text('Add recurring transaction'),
           ),
           const SizedBox(height: AppSpacing.md),
           if (provider.recurringExpenses.isEmpty)
             Text(
-              'No recurring expenses yet.',
+              'No recurring transactions yet.',
               style: Theme.of(
                 context,
               ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
@@ -103,11 +109,18 @@ class _RecurringSheetState extends State<RecurringSheet> {
                             style: Theme.of(context).textTheme.titleMedium,
                           ),
                           Text(
-                            '${item.category} · day ${item.dayOfMonth} · $amount',
+                            '${item.isIncome ? 'Received' : 'Spent'} · ${item.category} · day ${item.dayOfMonth} · $amount',
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
                         ],
                       ),
+                    ),
+                    IconButton(
+                      tooltip: 'Edit ${item.title}',
+                      onPressed: provider.isSaving
+                          ? null
+                          : () => _saveTemplate(item),
+                      icon: const Icon(Icons.edit_outlined),
                     ),
                     IconButton(
                       tooltip: applied
@@ -123,9 +136,9 @@ class _RecurringSheetState extends State<RecurringSheet> {
                                 SnackBar(
                                   content: Text(
                                     ok
-                                        ? 'Recurring expense applied.'
+                                        ? 'Recurring transaction applied.'
                                         : (provider.errorMessage ??
-                                              'Could not apply recurring expense.'),
+                                              'Could not apply recurring transaction.'),
                                   ),
                                 ),
                               );
@@ -158,9 +171,14 @@ class _RecurringSheetState extends State<RecurringSheet> {
 }
 
 class _RecurringEditor extends StatefulWidget {
-  const _RecurringEditor({required this.isUSD, required this.rate});
+  const _RecurringEditor({
+    required this.isUSD,
+    required this.rate,
+    this.initial,
+  });
   final bool isUSD;
   final double rate;
+  final RecurringExpense? initial;
   @override
   State<_RecurringEditor> createState() => _RecurringEditorState();
 }
@@ -171,6 +189,25 @@ class _RecurringEditorState extends State<_RecurringEditor> {
   final _amount = TextEditingController();
   final _day = TextEditingController(text: '1');
   String _category = 'Other';
+  String _type = 'expense';
+  String? _initialAmountText;
+
+  @override
+  void initState() {
+    super.initState();
+    final initial = widget.initial;
+    if (initial == null) return;
+    _title.text = initial.title;
+    _type = initial.type;
+    _category = initial.category;
+    _day.text = initial.dayOfMonth.toString();
+    final value = widget.isUSD
+        ? initial.amountCents / 100
+        : initial.amountCents / 100 * widget.rate;
+    _amount.text = value.toStringAsFixed(2);
+    _initialAmountText = _amount.text;
+  }
+
   @override
   void dispose() {
     _title.dispose();
@@ -179,18 +216,29 @@ class _RecurringEditorState extends State<_RecurringEditor> {
     super.dispose();
   }
 
-  Expense _entry() => Expense.fromEnteredAmount(
-    id: const Uuid().v4(),
-    title: _title.text.trim(),
-    enteredAmount: CurrencyFormatter.parseAmount(_amount.text)!,
-    currency: widget.isUSD ? 'USD' : 'YER',
-    exchangeRate: widget.rate,
-    date: DateTime.now(),
-    category: _category,
-  );
+  int _amountCents() {
+    if (widget.initial != null && _amount.text == _initialAmountText) {
+      return widget.initial!.amountCents;
+    }
+    return Expense.fromEnteredAmount(
+      id: widget.initial?.id ?? 'preview',
+      title: _title.text.trim(),
+      enteredAmount: CurrencyFormatter.parseAmount(_amount.text)!,
+      currency: widget.isUSD ? 'USD' : 'YER',
+      exchangeRate: widget.rate,
+      date: DateTime.now(),
+      category: _category,
+      type: _type,
+    ).amountCents;
+  }
+
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Add recurring expense'),
+    title: Text(
+      widget.initial == null
+          ? 'Add recurring transaction'
+          : 'Edit recurring transaction',
+    ),
     content: SingleChildScrollView(
       child: Form(
         key: _form,
@@ -198,12 +246,26 @@ class _RecurringEditorState extends State<_RecurringEditor> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(value: 'expense', label: Text('Spent')),
+                ButtonSegment(value: 'income', label: Text('Received')),
+              ],
+              selected: {_type},
+              onSelectionChanged: (selection) => setState(() {
+                _type = selection.first;
+                _category = _type == 'income' ? 'Income' : 'Other';
+              }),
+            ),
+            const SizedBox(height: AppSpacing.sm),
             TextFormField(
               controller: _title,
-              decoration: const InputDecoration(labelText: 'Title'),
+              decoration: InputDecoration(
+                labelText: _type == 'income' ? 'Source' : 'Title',
+              ),
               maxLength: 80,
               validator: (value) => value == null || value.trim().isEmpty
-                  ? 'Enter an expense name.'
+                  ? 'Enter a transaction name.'
                   : null,
             ),
             const SizedBox(height: AppSpacing.sm),
@@ -220,6 +282,9 @@ class _RecurringEditorState extends State<_RecurringEditor> {
                 final amount = CurrencyFormatter.parseAmount(value ?? '');
                 if (amount == null || amount <= 0) {
                   return 'Enter a positive amount.';
+                }
+                if (widget.initial != null && value == _initialAmountText) {
+                  return null;
                 }
                 try {
                   Expense.fromEnteredAmount(
@@ -239,11 +304,22 @@ class _RecurringEditorState extends State<_RecurringEditor> {
             ),
             const SizedBox(height: AppSpacing.sm),
             DropdownButtonFormField<String>(
+              key: ValueKey('recurring-category-$_type-$_category'),
               initialValue: _category,
               decoration: const InputDecoration(labelText: 'Category'),
-              items: ExpenseCategory.labels
-                  .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-                  .toList(),
+              items:
+                  (_type == 'income'
+                          ? {
+                              'Income',
+                              'Salary',
+                              'Gift',
+                              'Refund',
+                              'Other',
+                              _category,
+                            }
+                          : {...ExpenseCategory.labels, _category})
+                      .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                      .toList(),
               onChanged: (value) {
                 if (value != null) _category = value;
               },
@@ -275,15 +351,16 @@ class _RecurringEditorState extends State<_RecurringEditor> {
       FilledButton(
         onPressed: () {
           if (!_form.currentState!.validate()) return;
-          final entry = _entry();
           Navigator.pop(
             context,
             RecurringExpense(
-              id: entry.id,
-              title: entry.title,
-              amountCents: entry.amountCents,
-              category: entry.category,
+              id: widget.initial?.id ?? const Uuid().v4(),
+              title: _title.text.trim(),
+              amountCents: _amountCents(),
+              category: _category,
               dayOfMonth: int.parse(_day.text),
+              type: _type,
+              lastApplied: widget.initial?.lastApplied,
             ),
           );
         },
