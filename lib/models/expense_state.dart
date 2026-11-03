@@ -11,6 +11,7 @@ class ExpenseState {
     this.isUSD = true,
     this.exchangeRate = 540,
     this.budgetCents = 50000,
+    this.categoryBudgetCents = const {},
     this.autoApplyRecurring = false,
     this.requireBiometric = false,
     this.lastBudgetAlertLevel = 0,
@@ -24,6 +25,7 @@ class ExpenseState {
   final bool isUSD;
   final double exchangeRate;
   final int budgetCents;
+  final Map<String, int> categoryBudgetCents;
   final bool autoApplyRecurring;
   final bool requireBiometric;
   final int lastBudgetAlertLevel;
@@ -50,6 +52,26 @@ class ExpenseState {
         budget < 0 ||
         budget > 9007199254740991) {
       throw const FormatException('Invalid currency or budget settings.');
+    }
+    final categoryBudgetRaw =
+        raw['categoryBudgetCents'] ?? const <String, int>{};
+    if (categoryBudgetRaw is! Map || categoryBudgetRaw.length > 50) {
+      throw const FormatException('Invalid category budgets.');
+    }
+    final categoryBudgets = <String, int>{};
+    for (final entry in categoryBudgetRaw.entries) {
+      final key = entry.key;
+      final value = entry.value;
+      if (key is! String ||
+          key.trim().isEmpty ||
+          key.length > 80 ||
+          key != key.trim() ||
+          value is! int ||
+          value <= 0 ||
+          value > 9007199254740991) {
+        throw const FormatException('Invalid category budget.');
+      }
+      categoryBudgets[key] = value;
     }
     final expenses = <Expense>[];
     final ids = <String>{};
@@ -103,6 +125,7 @@ class ExpenseState {
       isUSD: raw['isUSD'] as bool,
       exchangeRate: rate.toDouble(),
       budgetCents: budget,
+      categoryBudgetCents: Map.unmodifiable(categoryBudgets),
       autoApplyRecurring: flag('autoApplyRecurring', false),
       requireBiometric: flag('requireBiometric', false),
       lastBudgetAlertLevel: raw['lastBudgetAlertLevel'] is int
@@ -121,6 +144,7 @@ class ExpenseState {
     'isUSD': isUSD,
     'exchangeRate': exchangeRate,
     'monthlyBudgetCents': budgetCents,
+    'categoryBudgetCents': categoryBudgetCents,
     'expenses': expenses.map((e) => e.toMap()).toList(),
     'recurringExpenses': recurring.map((e) => e.toMap()).toList(),
     'autoApplyRecurring': autoApplyRecurring,
@@ -139,6 +163,7 @@ class ExpenseState {
     bool? isUSD,
     double? exchangeRate,
     int? budgetCents,
+    Map<String, int>? categoryBudgetCents,
     bool? autoApplyRecurring,
     bool? requireBiometric,
     int? lastBudgetAlertLevel,
@@ -153,6 +178,9 @@ class ExpenseState {
     isUSD: isUSD ?? this.isUSD,
     exchangeRate: exchangeRate ?? this.exchangeRate,
     budgetCents: budgetCents ?? this.budgetCents,
+    categoryBudgetCents: categoryBudgetCents == null
+        ? this.categoryBudgetCents
+        : Map.unmodifiable(categoryBudgetCents),
     autoApplyRecurring: autoApplyRecurring ?? this.autoApplyRecurring,
     requireBiometric: requireBiometric ?? this.requireBiometric,
     lastBudgetAlertLevel: lastBudgetAlertLevel ?? this.lastBudgetAlertLevel,

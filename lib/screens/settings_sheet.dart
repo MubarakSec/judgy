@@ -4,12 +4,14 @@ import 'package:local_auth/local_auth.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/expense_provider.dart';
+import '../utils/expense_categories.dart';
 import '../services/backup_files.dart';
 import '../services/local_snapshots.dart';
 import '../services/quick_add_notifications.dart';
 import '../theme/app_theme.dart';
 import '../utils/currency_formatter.dart';
 import '../widgets/app_sheet.dart';
+import 'category_budget_editor.dart';
 
 class SettingsSheet extends StatefulWidget {
   const SettingsSheet({super.key});
@@ -108,6 +110,43 @@ class _SettingsSheetState extends State<SettingsSheet> {
       );
     }
   });
+
+  Future<void> _editCategoryBudget([String? existing]) async {
+    final provider = context.read<ExpenseProvider>();
+    final categories = <String>{
+      ...ExpenseCategory.labels,
+      ...provider.expenses.where((e) => !e.isIncome).map((e) => e.category),
+      ...provider.categoryBudgetCents.keys,
+    }.toList()..sort();
+    final available = existing == null
+        ? categories
+              .where(
+                (category) =>
+                    !provider.categoryBudgetCents.containsKey(category),
+              )
+              .toList()
+        : categories;
+    if (available.isEmpty) return;
+    final change = await showDialog<CategoryBudgetChange>(
+      context: context,
+      builder: (_) => CategoryBudgetEditor(
+        categories: available,
+        isUsd: provider.isUSD,
+        exchangeRate: provider.exchangeRate,
+        initialCategory: existing,
+        initialCents: existing == null
+            ? null
+            : provider.categoryBudgetCents[existing],
+      ),
+    );
+    if (change == null || !mounted) return;
+    await _run(() async {
+      _requireSaved(
+        await provider.setCategoryBudget(change.category, change.cents),
+        provider,
+      );
+    });
+  }
 
   Future<bool> _confirm(String title, String message, String action) async =>
       await showDialog<bool>(
@@ -324,6 +363,53 @@ class _SettingsSheetState extends State<SettingsSheet> {
             label: Text(_busy ? 'Working…' : 'Save settings'),
           ),
           const SizedBox(height: AppSpacing.lg),
+          ExpansionTile(
+            tilePadding: EdgeInsets.zero,
+            leading: const Icon(Icons.category_outlined),
+            title: const Text('Category budgets'),
+            subtitle: Text(
+              p.categoryBudgetCents.isEmpty
+                  ? 'Set monthly limits for your spending'
+                  : '${p.categoryBudgetCents.length} monthly ${p.categoryBudgetCents.length == 1 ? 'limit' : 'limits'}',
+            ),
+            children: [
+              for (final category
+                  in p.categoryBudgetCents.keys.toList()..sort())
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(category),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${CurrencyFormatter.displayFromUsdCents(usdCents: p.categoryTotals[category] ?? 0, isUsd: p.isUSD, exchangeRate: p.exchangeRate)} of ${CurrencyFormatter.displayFromUsdCents(usdCents: p.categoryBudgetCents[category]!, isUsd: p.isUSD, exchangeRate: p.exchangeRate)} this month',
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      LinearProgressIndicator(
+                        value:
+                            ((p.categoryTotals[category] ?? 0) /
+                                    p.categoryBudgetCents[category]!)
+                                .clamp(0.0, 1.0),
+                        color:
+                            (p.categoryTotals[category] ?? 0) >
+                                p.categoryBudgetCents[category]!
+                            ? AppColors.danger
+                            : AppColors.accent,
+                      ),
+                    ],
+                  ),
+                  trailing: const Icon(Icons.edit_outlined),
+                  onTap: disabled ? null : () => _editCategoryBudget(category),
+                ),
+              const SizedBox(height: AppSpacing.sm),
+              OutlinedButton.icon(
+                onPressed: disabled ? null : () => _editCategoryBudget(),
+                icon: const Icon(Icons.add),
+                label: const Text('Add category budget'),
+              ),
+              const SizedBox(height: AppSpacing.md),
+            ],
+          ),
           ExpansionTile(
             tilePadding: EdgeInsets.zero,
             leading: const Icon(Icons.add_circle_outline),
