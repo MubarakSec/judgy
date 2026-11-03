@@ -7,6 +7,7 @@ import '../theme/app_theme.dart';
 import '../utils/currency_formatter.dart';
 import '../utils/expense_categories.dart';
 import '../widgets/app_sheet.dart';
+import '../widgets/cash_flow_history_chart.dart';
 
 class InsightsSheet extends StatelessWidget {
   const InsightsSheet({super.key});
@@ -72,6 +73,16 @@ class InsightsSheet extends StatelessWidget {
           _InsightRow(
             label: 'Daily average',
             value: currency(provider.dailyAverageCents),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Text('Cash flow', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: AppSpacing.xxs),
+          Text('Last six months', style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: AppSpacing.sm),
+          CashFlowHistoryChart(
+            months: provider.sixMonthCashFlow,
+            isUsd: provider.isUSD,
+            exchangeRate: provider.exchangeRate,
           ),
           const SizedBox(height: AppSpacing.lg),
           Text(
