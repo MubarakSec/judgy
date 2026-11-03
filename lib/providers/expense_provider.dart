@@ -4,6 +4,7 @@ import 'dart:collection';
 import 'package:flutter/foundation.dart';
 
 import '../models/expense.dart';
+import '../models/cash_flow_history.dart';
 import '../models/expense_state.dart';
 import '../models/recurring_expense.dart';
 import '../repositories/expense_repository.dart';
@@ -179,6 +180,8 @@ class ExpenseProvider with ChangeNotifier {
   }
 
   int get monthlyRemainingCents => monthlyBudgetCents - monthlySpentCents;
+  List<MonthlyCashFlow> get sixMonthCashFlow =>
+      CashFlowHistory.calculate(expenses: _state.expenses, now: now);
   double get budgetProgress => monthlyBudgetCents <= 0
       ? 0
       : (monthlySpentCents / monthlyBudgetCents).clamp(0.0, 1.0);
