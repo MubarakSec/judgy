@@ -116,6 +116,8 @@ class ExpenseProvider with ChangeNotifier {
   bool get isUSD => _state.isUSD;
   double get exchangeRate => _state.exchangeRate;
   int get monthlyBudgetCents => _state.budgetCents;
+  Map<String, int> get categoryBudgetCents =>
+      UnmodifiableMapView(_state.categoryBudgetCents);
   double get monthlyBudget => monthlyBudgetCents / 100;
   String get timeFilter => _timeFilter;
   DateTime? get customRangeStart => _customRangeStart;
@@ -279,6 +281,25 @@ class ExpenseProvider with ChangeNotifier {
           s.copyWith(exchangeRate: rate, budgetCents: (budget * 100).round()),
     );
   }
+
+  Future<bool> setCategoryBudget(String category, int? cents) => _mutate((s) {
+    if (category.trim().isEmpty ||
+        category.length > 80 ||
+        category != category.trim() ||
+        (cents != null && (cents <= 0 || cents > 9007199254740991))) {
+      throw const FormatException('Enter a valid category and monthly limit.');
+    }
+    final budgets = {...s.categoryBudgetCents};
+    if (cents == null) {
+      budgets.remove(category);
+    } else {
+      budgets[category] = cents;
+    }
+    if (budgets.length > 50) {
+      throw const FormatException('Keep up to 50 category budgets.');
+    }
+    return s.copyWith(categoryBudgetCents: budgets);
+  });
 
   Future<bool> setRequireBiometric(bool value) =>
       _mutate((s) => s.copyWith(requireBiometric: value));
