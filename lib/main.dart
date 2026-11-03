@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import 'providers/expense_provider.dart';
 import 'screens/home_screen.dart';
+import 'screens/quick_add_overlay.dart';
 import 'services/quick_add_notifications.dart';
 import 'repositories/sqlite_expense_repository.dart';
 import 'theme/app_theme.dart';
@@ -23,6 +24,18 @@ Future<void> main() async {
   );
 }
 
+@pragma('vm:entry-point')
+Future<void> quickAddMain() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await QuickAddNotifications.initialize(showQuickAdd: false);
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => ExpenseProvider(repository: SqliteExpenseRepository()),
+      child: const QuickAddApp(),
+    ),
+  );
+}
+
 class JudgyApp extends StatelessWidget {
   const JudgyApp({super.key, this.openAddOnStart = false});
 
@@ -38,4 +51,17 @@ class JudgyApp extends StatelessWidget {
       home: HomeScreen(openAddOnStart: openAddOnStart),
     );
   }
+}
+
+class QuickAddApp extends StatelessWidget {
+  const QuickAddApp({super.key});
+
+  @override
+  Widget build(BuildContext context) => MaterialApp(
+    title: 'Quick add',
+    debugShowCheckedModeBanner: false,
+    theme: AppTheme.dark.copyWith(scaffoldBackgroundColor: Colors.transparent),
+    builder: (context, child) => AppLockGate(child: child!),
+    home: const QuickAddOverlay(),
+  );
 }

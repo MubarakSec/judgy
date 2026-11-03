@@ -19,6 +19,8 @@ track a monthly spending budget, and view totals in USD or Yemeni riyals (YER).
 - Apply recurring templates once per month, or enable auto-apply for due templates.
   Days 29–31 clamp to month end. Auto-apply checks on launch, resume, and enabling;
   it applies the current month, without backfilling missed months.
+- On Android, tapping the persistent Quick add notification opens the entry sheet
+  over the current app. Saving or dismissing it returns to that app.
 
 ## Storage, privacy, and recovery
 

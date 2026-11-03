@@ -196,4 +196,16 @@ void main() {
     );
     expect(repo.source, before);
   });
+  test('separate app views preserve each other’s transactions', () async {
+    final repo = MemoryRepository();
+    final mainView = create(repo);
+    final quickView = create(repo);
+    await Future.wait([mainView.initialized, quickView.initialized]);
+    expect(await quickView.addExpense(expense('quick')), isTrue);
+    expect(await mainView.addExpense(expense('main')), isTrue);
+    final stored = ExpenseState.decode(repo.source!);
+    expect(stored.expenses.map((e) => e.id).toSet(), {'quick', 'main'});
+    await quickView.refreshFromRepository();
+    expect(quickView.expenses, hasLength(2));
+  });
 }

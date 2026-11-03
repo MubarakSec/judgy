@@ -69,7 +69,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           _openPendingAdd();
-          unawaited(_provider.reconcileRecurring());
+          unawaited(_refreshAfterResume());
         }
       });
     }
@@ -97,7 +97,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed &&
         _ready &&
         AppLockGate.sessionUnlocked.value) {
-      unawaited(_provider.reconcileRecurring());
+      unawaited(_refreshAfterResume());
+    }
+  }
+
+  Future<void> _refreshAfterResume() async {
+    await _provider.refreshFromRepository();
+    if (mounted && AppLockGate.sessionUnlocked.value) {
+      await _provider.reconcileRecurring();
     }
   }
 

@@ -385,6 +385,31 @@ class ExpenseProvider with ChangeNotifier {
   Future<bool> resetStorage() =>
       _mutate((_) => const ExpenseState(), allowRecovery: true, reset: true);
 
+  Future<void> refreshFromRepository() async {
+    await initialized;
+    final completer = Completer<void>();
+    _queue = _queue.then((_) async {
+      try {
+        final source = await _repository.read();
+        if (source != null) {
+          final latest = ExpenseState.decode(source);
+          if (latest.encode() != _state.encode()) {
+            _state = latest;
+            _loadFailed = false;
+            _warningMessage = null;
+            _notify();
+          }
+        }
+      } catch (_) {
+        _errorMessage = 'Saved data could not be refreshed.';
+        _notify();
+      } finally {
+        completer.complete();
+      }
+    });
+    return completer.future;
+  }
+
   Future<bool> _mutate(
     ExpenseState Function(ExpenseState) change, {
     bool recovery = false,
@@ -402,6 +427,10 @@ class ExpenseProvider with ChangeNotifier {
           throw const FormatException(
             'Saved data could not be opened. Restore a valid backup or reset before making changes.',
           );
+        }
+        if (!_loadFailed) {
+          final source = await _repository.read();
+          if (source != null) _state = ExpenseState.decode(source);
         }
         var next = change(_state);
         if (identical(next, _state)) {
