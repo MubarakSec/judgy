@@ -125,7 +125,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
         : p.previewBackup(source).expenses.length;
     if (!await _confirm(
           'Review restore',
-          '$name contains $count expenses. This will replace your ${p.expenses.length} current expenses${csv ? '' : ' and budget settings'}. A recovery copy of the current data will be kept. Device lock settings stay unchanged.',
+          '$name contains $count transactions. This will replace your ${p.expenses.length} current transactions${csv ? '' : ' and budget settings'}. A recovery copy of the current data will be kept. Device lock settings stay unchanged.',
           'Replace data',
         ) ||
         !mounted) {
@@ -135,7 +135,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
     if (!mounted) return;
     _rateController.text = p.exchangeRate.toString();
     _budgetController.text = p.monthlyBudget.toStringAsFixed(2);
-    _message('Restored $count expenses.');
+    _message('Restored $count transactions.');
   }
 
   Future<void> _restoreFile() => _run(() async {
@@ -188,7 +188,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
     if (!mounted) return;
     if (files.isEmpty) {
       _message(
-        'A local snapshot is saved on the first expense write each day.',
+        'A local snapshot is saved on the first transaction write each day.',
       );
       return;
     }
@@ -226,7 +226,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
   Future<void> _reset() => _run(() async {
     if (!await _confirm(
           'Reset all data?',
-          'This removes all expenses, recurring templates, recovery copies, and settings from this device. Export a backup first if you want to keep them.',
+          'This removes all transactions, recurring templates, recovery copies, and settings from this device. Export a backup first if you want to keep them.',
           'Reset all data',
         ) ||
         !mounted) {
@@ -327,7 +327,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
               const Padding(
                 padding: EdgeInsets.only(bottom: AppSpacing.md),
                 child: Text(
-                  'Expense records stay on this device. Voice recognition runs entirely offline using a bundled Whisper model.',
+                  'Transaction records stay on this device. Android cloud backup is disabled.',
                 ),
               ),
             ],
@@ -345,7 +345,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
                 leading: const Icon(Icons.ios_share_rounded),
                 title: const Text('Export backup'),
                 subtitle: const Text(
-                  'JSON · expenses, templates, and settings',
+                  'JSON · transactions, templates, and settings',
                 ),
                 onTap: disabled ? null : () => _export(),
               ),

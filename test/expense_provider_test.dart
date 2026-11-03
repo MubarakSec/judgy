@@ -68,6 +68,37 @@ void main() {
     expect(provider.monthlyRemainingCents, 500);
   });
 
+  test(
+    'income changes net flow without changing spending budget or categories',
+    () async {
+      final provider = await createProvider();
+      await provider.updateSettings(540, 10);
+      await provider.addExpense(expense('coffee', 200, now));
+      await provider.addExpense(
+        Expense(
+          id: 'pay',
+          title: 'Pay',
+          amountCents: 1000,
+          date: now,
+          category: 'Salary',
+          type: 'income',
+        ),
+      );
+      expect(provider.totalSpentCents, 200);
+      expect(provider.totalIncomeCents, 1000);
+      expect(provider.netCents, 800);
+      expect(provider.monthlySpentCents, 200);
+      expect(provider.monthlyIncomeCents, 1000);
+      expect(provider.monthlyRemainingCents, 800);
+      expect(provider.categoryTotals, {'Other': 200});
+      final restored = await createProvider();
+      expect(
+        restored.expenses.firstWhere((e) => e.id == 'pay').isIncome,
+        isTrue,
+      );
+    },
+  );
+
   test('persists one versioned state document and restores it', () async {
     final provider = await createProvider();
     await provider.updateSettings(600, 750);
@@ -132,7 +163,6 @@ void main() {
     expect(provider.errorMessage, isNotNull);
   });
 
-
   test('does not overwrite corrupt state when loading fails', () async {
     SharedPreferences.setMockInitialValues({
       'judgy_state_v2': '{not valid json',
@@ -154,22 +184,24 @@ void main() {
     expect(after, before);
   });
 
-  test('does not overwrite unsupported-version state when loading fails', () async {
-    SharedPreferences.setMockInitialValues({
-      'judgy_state_v2': '{"version":999,"expenses":[]}',
-    });
+  test(
+    'does not overwrite unsupported-version state when loading fails',
+    () async {
+      SharedPreferences.setMockInitialValues({
+        'judgy_state_v2': '{"version":999,"expenses":[]}',
+      });
 
-    final provider = ExpenseProvider(clock: () => now);
-    await provider.initialized;
+      final provider = ExpenseProvider(clock: () => now);
+      await provider.initialized;
 
-    expect(provider.loadFailed, isTrue);
+      expect(provider.loadFailed, isTrue);
 
-    final preferences = await SharedPreferences.getInstance();
-    final before = preferences.getString('judgy_state_v2');
+      final preferences = await SharedPreferences.getInstance();
+      final before = preferences.getString('judgy_state_v2');
 
-    final saved = await provider.addExpense(expense('new', 100, now));
-    expect(saved, isFalse);
-    expect(preferences.getString('judgy_state_v2'), before);
-  });
-
+      final saved = await provider.addExpense(expense('new', 100, now));
+      expect(saved, isFalse);
+      expect(preferences.getString('judgy_state_v2'), before);
+    },
+  );
 }

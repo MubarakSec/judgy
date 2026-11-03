@@ -50,12 +50,29 @@ class ExpenseProvider with ChangeNotifier {
 
   UnmodifiableListView<Expense> get expenses =>
       UnmodifiableListView(_state.expenses);
+  List<Expense> get quickEntries {
+    final counts = <String, int>{};
+    final latest = <String, Expense>{};
+    for (final entry in _state.expenses) {
+      final key =
+          '${entry.type}|${entry.title.trim().toLowerCase()}|${entry.category}';
+      counts.update(key, (count) => count + 1, ifAbsent: () => 1);
+      latest.putIfAbsent(key, () => entry);
+    }
+    final keys = latest.keys.toList()
+      ..sort((a, b) {
+        final frequency = counts[b]!.compareTo(counts[a]!);
+        return frequency != 0
+            ? frequency
+            : latest[b]!.date.compareTo(latest[a]!.date);
+      });
+    return keys.take(5).map((key) => latest[key]!).toList();
+  }
+
   UnmodifiableListView<RecurringExpense> get recurringExpenses =>
       UnmodifiableListView(_state.recurring);
   bool get autoApplyRecurring => _state.autoApplyRecurring;
   bool get requireBiometric => _state.requireBiometric;
-  String get voiceLocale => _state.voiceLocale;
-  bool get voiceOnDevice => _state.voiceOnDevice;
   DateTime get now => _clock();
   bool get isUSD => _state.isUSD;
   double get exchangeRate => _state.exchangeRate;
@@ -88,17 +105,38 @@ class ExpenseProvider with ChangeNotifier {
         .toList();
   }
 
-  int get totalSpentCents =>
-      filteredExpenses.fold(0, (sum, e) => sum + e.amountCents);
+  int get totalSpentCents => filteredExpenses
+      .where((e) => !e.isIncome)
+      .fold(0, (sum, e) => sum + e.amountCents);
+  int get totalIncomeCents => filteredExpenses
+      .where((e) => e.isIncome)
+      .fold(0, (sum, e) => sum + e.amountCents);
+  int get netCents => totalIncomeCents - totalSpentCents;
   int _monthlyTotal(ExpenseState state) {
     final current = now;
     final start = DateTime(current.year, current.month);
     return state.expenses
-        .where((e) => !e.date.isBefore(start) && !e.date.isAfter(current))
+        .where(
+          (e) =>
+              !e.isIncome &&
+              !e.date.isBefore(start) &&
+              !e.date.isAfter(current),
+        )
         .fold(0, (sum, e) => sum + e.amountCents);
   }
 
   int get monthlySpentCents => _monthlyTotal(_state);
+  int get monthlyIncomeCents {
+    final current = now;
+    final start = DateTime(current.year, current.month);
+    return _state.expenses
+        .where(
+          (e) =>
+              e.isIncome && !e.date.isBefore(start) && !e.date.isAfter(current),
+        )
+        .fold(0, (sum, e) => sum + e.amountCents);
+  }
+
   int get monthlyRemainingCents => monthlyBudgetCents - monthlySpentCents;
   double get budgetProgress => monthlyBudgetCents <= 0
       ? 0
@@ -109,7 +147,7 @@ class ExpenseProvider with ChangeNotifier {
     final start = DateTime(now.year, now.month);
     final totals = <String, int>{};
     for (final e in _state.expenses) {
-      if (e.date.isBefore(start) || e.date.isAfter(now)) continue;
+      if (e.isIncome || e.date.isBefore(start) || e.date.isAfter(now)) continue;
       totals.update(
         e.category,
         (value) => value + e.amountCents,
@@ -123,7 +161,9 @@ class ExpenseProvider with ChangeNotifier {
     final start = DateTime(now.year, now.month - 1);
     final end = DateTime(now.year, now.month);
     return _state.expenses
-        .where((e) => !e.date.isBefore(start) && e.date.isBefore(end))
+        .where(
+          (e) => !e.isIncome && !e.date.isBefore(start) && e.date.isBefore(end),
+        )
         .fold(0, (sum, e) => sum + e.amountCents);
   }
 
@@ -142,7 +182,9 @@ class ExpenseProvider with ChangeNotifier {
     );
     final start = DateTime(current.year, current.month - 1);
     return _state.expenses
-        .where((e) => !e.date.isBefore(start) && !e.date.isAfter(end))
+        .where(
+          (e) => !e.isIncome && !e.date.isBefore(start) && !e.date.isAfter(end),
+        )
         .fold(0, (sum, e) => sum + e.amountCents);
   }
 
@@ -201,11 +243,6 @@ class ExpenseProvider with ChangeNotifier {
 
   Future<bool> setRequireBiometric(bool value) =>
       _mutate((s) => s.copyWith(requireBiometric: value));
-  Future<bool> setVoicePreferences({
-    required String locale,
-    required bool onDevice,
-  }) =>
-      _mutate((s) => s.copyWith(voiceLocale: locale, voiceOnDevice: onDevice));
   Future<bool> setAutoApplyRecurring(bool value) => _mutate((s) {
     final updated = s.copyWith(autoApplyRecurring: value);
     return value ? _dueRecurring(updated) : updated;

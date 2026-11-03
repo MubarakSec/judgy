@@ -1,5 +1,8 @@
 # Judgy upgrade review — 25 October 2026
 
+Historical review. Voice entry described below was removed in November 2026;
+current behavior is documented in README.md.
+
 The upgrade follows the initial source review. `git pull --ff-only` first advanced
 main from `9f36798` to `e6adcce`; that upstream change already corrected the Android
 namespace and enabled notification desugaring.

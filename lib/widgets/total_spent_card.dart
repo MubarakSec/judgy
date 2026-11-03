@@ -16,6 +16,16 @@ class TotalSpentCard extends StatelessWidget {
       isUsd: provider.isUSD,
       exchangeRate: provider.exchangeRate,
     );
+    final income = CurrencyFormatter.displayFromUsdCents(
+      usdCents: provider.totalIncomeCents,
+      isUsd: provider.isUSD,
+      exchangeRate: provider.exchangeRate,
+    );
+    final net = CurrencyFormatter.displayFromUsdCents(
+      usdCents: provider.netCents.abs(),
+      isUsd: provider.isUSD,
+      exchangeRate: provider.exchangeRate,
+    );
     final budget = CurrencyFormatter.displayFromUsdCents(
       usdCents: provider.monthlyBudgetCents,
       isUsd: provider.isUSD,
@@ -36,16 +46,17 @@ class TotalSpentCard extends StatelessWidget {
     final periodLabel = switch (provider.timeFilter) {
       'Day' => 'Spent today',
       'Week' => 'Spent this week',
+      'Custom' => 'Spent in range',
       _ => 'Spent this month',
     };
 
     return Semantics(
       container: true,
       label: hasBudget
-          ? '$periodLabel: $spent. Monthly budget: $budget. '
+          ? '$periodLabel: $spent. Received: $income. Net: ${provider.netCents < 0 ? '-' : '+'}$net. Monthly budget: $budget. '
                 '${provider.isOverBudget ? '$remaining over budget' : '$remaining remaining'}. '
                 '$percentageLabel% used.'
-          : '$periodLabel: $spent. No monthly budget set.',
+          : '$periodLabel: $spent. Received: $income. Net: ${provider.netCents < 0 ? '-' : '+'}$net. No monthly budget set.',
       child: ExcludeSemantics(
         child: Container(
           width: double.infinity,
@@ -53,11 +64,9 @@ class TotalSpentCard extends StatelessWidget {
           decoration: BoxDecoration(
             color: AppColors.surface,
             borderRadius: BorderRadius.circular(AppRadii.large),
-            border: Border.all(
-              color: provider.isOverBudget && hasBudget
-                  ? AppColors.danger
-                  : AppColors.border,
-            ),
+            border: provider.isOverBudget && hasBudget
+                ? Border.all(color: AppColors.danger)
+                : null,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -85,6 +94,28 @@ class TotalSpentCard extends StatelessWidget {
                     ),
                   ),
                 ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Row(
+                children: [
+                  Expanded(
+                    child: _FlowValue(
+                      label: 'Received',
+                      value: income,
+                      color: AppColors.success,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: _FlowValue(
+                      label: 'Net',
+                      value: '${provider.netCents < 0 ? '-' : '+'}$net',
+                      color: provider.netCents < 0
+                          ? AppColors.danger
+                          : AppColors.textPrimary,
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: AppSpacing.lg),
               const Divider(),
@@ -180,4 +211,35 @@ class TotalSpentCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _FlowValue extends StatelessWidget {
+  const _FlowValue({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(label, style: Theme.of(context).textTheme.bodySmall),
+      const SizedBox(height: AppSpacing.xxs),
+      FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerLeft,
+        child: Text(
+          value,
+          maxLines: 1,
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(color: color),
+        ),
+      ),
+    ],
+  );
 }

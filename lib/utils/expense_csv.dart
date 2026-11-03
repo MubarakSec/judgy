@@ -8,6 +8,7 @@ class ExpenseCsv {
     'amountCents',
     'date',
     'category',
+    'type',
     'note',
     'originalAmountMinorUnits',
     'originalCurrency',

@@ -34,14 +34,25 @@ class InsightsSheet extends StatelessWidget {
 
     return AppSheet(
       title: 'Insights',
-      subtitle: 'Monthly totals, with change compared to the same elapsed period.',
+      subtitle:
+          'Monthly totals, with change compared to the same elapsed period.',
       closeLabel: 'Close insights',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _InsightRow(
-            label: 'This month',
+            label: 'Spent this month',
             value: currency(provider.monthlySpentCents),
+          ),
+          _InsightRow(
+            label: 'Received this month',
+            value: currency(provider.monthlyIncomeCents),
+            valueColor: AppColors.success,
+          ),
+          _InsightRow(
+            label: 'Net this month',
+            value:
+                '${provider.monthlyIncomeCents - provider.monthlySpentCents < 0 ? '-' : '+'}${currency((provider.monthlyIncomeCents - provider.monthlySpentCents).abs())}',
           ),
           _InsightRow(
             label: 'Previous month',
@@ -116,7 +127,10 @@ class InsightsSheet extends StatelessWidget {
               final buffer = StringBuffer();
               buffer.writeln('Judgy monthly summary');
               buffer.writeln(
-                'This month: ${currency(provider.monthlySpentCents)}',
+                'Spent this month: ${currency(provider.monthlySpentCents)}',
+              );
+              buffer.writeln(
+                'Received this month: ${currency(provider.monthlyIncomeCents)}',
               );
               buffer.writeln(
                 'Previous month: ${currency(provider.previousMonthSpentCents)}',

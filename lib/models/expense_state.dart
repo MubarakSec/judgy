@@ -13,8 +13,6 @@ class ExpenseState {
     this.budgetCents = 50000,
     this.autoApplyRecurring = false,
     this.requireBiometric = false,
-    this.voiceLocale = 'ar',
-    this.voiceOnDevice = true,
     this.lastBudgetAlertLevel = 0,
     this.budgetAlertPeriod = 0,
   });
@@ -26,8 +24,6 @@ class ExpenseState {
   final int budgetCents;
   final bool autoApplyRecurring;
   final bool requireBiometric;
-  final String voiceLocale;
-  final bool voiceOnDevice;
   final int lastBudgetAlertLevel;
   final int budgetAlertPeriod;
 
@@ -83,10 +79,6 @@ class ExpenseState {
       return raw[key] as bool;
     }
 
-    final locale = raw['voiceLocale'] ?? 'ar';
-    if (locale is! String || locale.length > 80) {
-      throw const FormatException('Invalid speech language.');
-    }
     return ExpenseState(
       expenses: List.unmodifiable(expenses),
       recurring: List.unmodifiable(recurring),
@@ -95,8 +87,6 @@ class ExpenseState {
       budgetCents: budget,
       autoApplyRecurring: flag('autoApplyRecurring', false),
       requireBiometric: flag('requireBiometric', false),
-      voiceLocale: locale.trim().isEmpty ? 'ar' : locale,
-      voiceOnDevice: flag('voiceOnDevice', true),
       lastBudgetAlertLevel: raw['lastBudgetAlertLevel'] is int
           ? raw['lastBudgetAlertLevel'] as int
           : 0,
@@ -115,8 +105,6 @@ class ExpenseState {
     'recurringExpenses': recurring.map((e) => e.toMap()).toList(),
     'autoApplyRecurring': autoApplyRecurring,
     'requireBiometric': requireBiometric,
-    'voiceLocale': voiceLocale,
-    'voiceOnDevice': voiceOnDevice,
     'lastBudgetAlertLevel': lastBudgetAlertLevel,
     'budgetAlertPeriod': budgetAlertPeriod,
   };
@@ -131,8 +119,6 @@ class ExpenseState {
     int? budgetCents,
     bool? autoApplyRecurring,
     bool? requireBiometric,
-    String? voiceLocale,
-    bool? voiceOnDevice,
     int? lastBudgetAlertLevel,
     int? budgetAlertPeriod,
   }) => ExpenseState(
@@ -145,8 +131,6 @@ class ExpenseState {
     budgetCents: budgetCents ?? this.budgetCents,
     autoApplyRecurring: autoApplyRecurring ?? this.autoApplyRecurring,
     requireBiometric: requireBiometric ?? this.requireBiometric,
-    voiceLocale: voiceLocale ?? this.voiceLocale,
-    voiceOnDevice: voiceOnDevice ?? this.voiceOnDevice,
     lastBudgetAlertLevel: lastBudgetAlertLevel ?? this.lastBudgetAlertLevel,
     budgetAlertPeriod: budgetAlertPeriod ?? this.budgetAlertPeriod,
   );

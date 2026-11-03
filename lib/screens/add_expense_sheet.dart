@@ -8,22 +8,19 @@ import '../providers/expense_provider.dart';
 import '../theme/app_theme.dart';
 import '../utils/currency_formatter.dart';
 import '../utils/expense_categories.dart';
-import '../utils/judgy_quotes.dart';
 import '../widgets/app_sheet.dart';
-import '../widgets/voice_entry_panel.dart';
-import '../services/voice_input_controller.dart';
 
 class AddExpenseSheet extends StatefulWidget {
   const AddExpenseSheet({
     super.key,
     this.expense,
     this.duplicate = false,
-    this.voiceController,
+    this.suggestion,
   });
 
   final Expense? expense;
   final bool duplicate;
-  final VoiceInputController? voiceController;
+  final Expense? suggestion;
 
   @override
   State<AddExpenseSheet> createState() => _AddExpenseSheetState();
@@ -34,11 +31,11 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
   final _titleController = TextEditingController();
   final _amountController = TextEditingController();
   final _noteController = TextEditingController();
-  String _selectedCategory = ExpenseCategory.labels.first;
+  String _selectedCategory = 'Other';
   late DateTime _selectedDate;
   String? _submitError;
   bool _isSubmitting = false;
-  bool _showVoice = false;
+  String _type = 'expense';
   late String _entryCurrency;
   String? _initialAmountText;
   String? _initialCurrency;
@@ -46,15 +43,18 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
   @override
   void initState() {
     super.initState();
-    final expense = widget.expense;
+    final expense = widget.expense ?? widget.suggestion;
     final provider = context.read<ExpenseProvider>();
-    _selectedDate = widget.duplicate
+    _selectedDate = widget.duplicate || widget.suggestion != null
         ? provider.now
         : expense?.date ?? provider.now;
     _entryCurrency = provider.isUSD ? 'USD' : 'YER';
     if (expense != null) {
+      _type = expense.type;
       _titleController.text = expense.title;
-      _noteController.text = expense.note ?? '';
+      _noteController.text = widget.suggestion == null
+          ? expense.note ?? ''
+          : '';
       _selectedCategory = expense.category;
       final original = expense.originalCurrency;
       if ((original == 'USD' || original == 'YER') &&
@@ -81,7 +81,7 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
   }
 
   Future<void> _submitData() async {
-    if (_isSubmitting || _showVoice || !_formKey.currentState!.validate()) {
+    if (_isSubmitting || !_formKey.currentState!.validate()) {
       return;
     }
 
@@ -110,6 +110,7 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
               date: _selectedDate,
               category: _selectedCategory,
               note: _noteController.text,
+              type: _type,
               originalAmountMinorUnits: original.originalAmountMinorUnits,
               originalCurrency: original.originalCurrency,
               exchangeRateAtEntry: original.exchangeRateAtEntry,
@@ -123,6 +124,7 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
               date: _selectedDate,
               category: _selectedCategory,
               note: _noteController.text,
+              type: _type,
             );
       final saved = isEditing
           ? await provider.updateExpense(expense)
@@ -134,8 +136,9 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
         if (isEditing) {
           Navigator.of(context).pop(true);
         } else {
-          final quote = JudgyQuotes.getQuote(_selectedCategory, expense.amount);
-          Navigator.of(context).pop(quote);
+          Navigator.of(
+            context,
+          ).pop(_type == 'income' ? 'Income saved.' : 'Expense saved.');
         }
       } else {
         setState(() {
@@ -160,12 +163,14 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
 
     return AppSheet(
       title: widget.expense == null
-          ? 'Add an expense'
+          ? widget.suggestion == null
+                ? 'Add a transaction'
+                : 'Add again'
           : widget.duplicate
-          ? 'Duplicate expense'
-          : 'Edit expense',
-      subtitle: 'A quick entry keeps the picture honest.',
-      closeLabel: 'Close add expense',
+          ? 'Duplicate transaction'
+          : 'Edit transaction',
+      subtitle: 'Record money going out or coming in.',
+      closeLabel: 'Close transaction form',
       child: Form(
         key: _formKey,
         autovalidateMode: AutovalidateMode.onUserInteraction,
@@ -173,39 +178,46 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (_showVoice)
-              VoiceEntryPanel(
-                controller: widget.voiceController,
-                onClose: () => setState(() => _showVoice = false),
-                onApply: (draft, currency) => setState(() {
-                  _titleController.text = draft.title;
-                  _amountController.text = draft.amount!.toString();
-                  _entryCurrency = currency;
-                  _selectedDate = draft.date;
-                  _selectedCategory = draft.category;
-                  _submitError = null;
-                  _showVoice = false;
-                }),
-              ),
+            SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(
+                  value: 'expense',
+                  label: Text('Spent'),
+                  icon: Icon(Icons.arrow_upward),
+                ),
+                ButtonSegment(
+                  value: 'income',
+                  label: Text('Received'),
+                  icon: Icon(Icons.arrow_downward),
+                ),
+              ],
+              selected: {_type},
+              onSelectionChanged: _isSubmitting
+                  ? null
+                  : (selection) => setState(() {
+                      _type = selection.first;
+                      _selectedCategory = _type == 'income'
+                          ? 'Income'
+                          : 'Other';
+                    }),
+            ),
+            const SizedBox(height: AppSpacing.md),
             TextFormField(
               controller: _titleController,
               textCapitalization: TextCapitalization.sentences,
               textInputAction: TextInputAction.next,
               inputFormatters: [LengthLimitingTextInputFormatter(80)],
               decoration: InputDecoration(
-                labelText: 'Expense name',
-                hintText: 'Coffee, groceries, taxi…',
-                suffixIcon: IconButton(
-                  tooltip: 'Add by voice',
-                  onPressed: _isSubmitting
-                      ? null
-                      : () => setState(() => _showVoice = !_showVoice),
-                  icon: Icon(_showVoice ? Icons.mic : Icons.mic_none),
-                ),
+                labelText: _type == 'income'
+                    ? 'Where it came from'
+                    : 'What you bought',
+                hintText: _type == 'income'
+                    ? 'Pay, gift, refund…'
+                    : 'Coffee, groceries, taxi…',
               ),
               validator: (value) {
                 if (value == null || value.trim().isEmpty) {
-                  return 'Enter what you spent money on.';
+                  return 'Enter a name for this transaction.';
                 }
                 return null;
               },
@@ -282,14 +294,20 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
               isExpanded: true,
               dropdownColor: AppColors.surfaceElevated,
               decoration: const InputDecoration(labelText: 'Category'),
-              items: {...ExpenseCategory.labels, _selectedCategory}
-                  .map(
-                    (category) => DropdownMenuItem(
-                      value: category,
-                      child: Text(category),
-                    ),
-                  )
-                  .toList(),
+              items:
+                  {
+                        ...(_type == 'income'
+                            ? ['Income', 'Salary', 'Gift', 'Refund', 'Other']
+                            : ExpenseCategory.labels),
+                        _selectedCategory,
+                      }
+                      .map(
+                        (category) => DropdownMenuItem(
+                          value: category,
+                          child: Text(category),
+                        ),
+                      )
+                      .toList(),
               onChanged: _isSubmitting
                   ? null
                   : (value) {
@@ -321,14 +339,20 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
             ],
             const SizedBox(height: AppSpacing.lg),
             FilledButton.icon(
-              onPressed: _isSubmitting || _showVoice ? null : _submitData,
+              onPressed: _isSubmitting ? null : _submitData,
               icon: _isSubmitting
                   ? const SizedBox.square(
                       dimension: 18,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.check),
-              label: Text(_isSubmitting ? 'Saving…' : 'Save expense'),
+              label: Text(
+                _isSubmitting
+                    ? 'Saving…'
+                    : _type == 'income'
+                    ? 'Save income'
+                    : 'Save expense',
+              ),
             ),
           ],
         ),

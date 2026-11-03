@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 
 abstract final class AppColors {
-  static const background = Color(0xFF090A0D);
-  static const surface = Color(0xFF16171B);
-  static const surfaceElevated = Color(0xFF1E2026);
-  static const input = Color(0xFF101116);
-  static const accent = Color(0xFFA982FF);
-  static const accentSoft = Color(0xFF2B213D);
-  static const onAccent = Color(0xFF130C1D);
-  static const textPrimary = Color(0xFFF7F5FA);
-  static const textSecondary = Color(0xFFAAA6B2);
-  static const border = Color(0xFF35363E);
+  static const background = Color(0xFF101211);
+  static const surface = Color(0xFF1A1D1B);
+  static const surfaceElevated = Color(0xFF242824);
+  static const input = Color(0xFF141715);
+  static const accent = Color(0xFFE6B86A);
+  static const accentSoft = Color(0xFF332819);
+  static const onAccent = Color(0xFF241707);
+  static const textPrimary = Color(0xFFF4F3EE);
+  static const textSecondary = Color(0xFFACB1AA);
+  static const border = Color(0xFF3B403B);
   static const success = Color(0xFF64D8A7);
   static const warning = Color(0xFFFFC96B);
   static const danger = Color(0xFFFF6B73);
