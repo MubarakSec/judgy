@@ -51,6 +51,11 @@ class ExpenseProvider with ChangeNotifier {
   UnmodifiableListView<Expense> get expenses =>
       UnmodifiableListView(_state.expenses);
   List<Expense> get quickEntries {
+    final byId = {for (final expense in _state.expenses) expense.id: expense};
+    final pinned = _state.pinnedQuickEntryIds
+        .map((id) => byId[id])
+        .whereType<Expense>()
+        .toList();
     final counts = <String, int>{};
     final latest = <String, Expense>{};
     for (final entry in _state.expenses) {
@@ -66,8 +71,36 @@ class ExpenseProvider with ChangeNotifier {
             ? frequency
             : latest[b]!.date.compareTo(latest[a]!.date);
       });
-    return keys.take(5).map((key) => latest[key]!).toList();
+    final seen = pinned.map(_quickEntryKey).toSet();
+    for (final key in keys) {
+      if (pinned.length >= 5) break;
+      if (seen.add(key)) pinned.add(latest[key]!);
+    }
+    return pinned;
   }
+
+  static String _quickEntryKey(Expense entry) =>
+      '${entry.type}|${entry.title.trim().toLowerCase()}|${entry.category}';
+
+  bool isQuickEntryPinned(String id) => _state.pinnedQuickEntryIds.contains(id);
+
+  Future<bool> toggleQuickEntryPin(String id) => _mutate((state) {
+    if (!state.expenses.any((entry) => entry.id == id)) {
+      throw const FormatException('Transaction no longer exists.');
+    }
+    final pins = [...state.pinnedQuickEntryIds];
+    if (pins.contains(id)) {
+      pins.remove(id);
+    } else {
+      if (pins.length >= 5) {
+        throw const FormatException(
+          'Keep up to five quick entries. Unpin one first.',
+        );
+      }
+      pins.insert(0, id);
+    }
+    return state.copyWith(pinnedQuickEntryIds: pins);
+  });
 
   UnmodifiableListView<RecurringExpense> get recurringExpenses =>
       UnmodifiableListView(_state.recurring);
@@ -270,7 +303,12 @@ class ExpenseProvider with ChangeNotifier {
       final index = s.expenses.indexWhere((e) => e.id == id);
       if (index < 0) throw const FormatException('Expense no longer exists.');
       removal = ExpenseRemoval(expense: s.expenses[index], index: index);
-      return s.copyWith(expenses: [...s.expenses]..removeAt(index));
+      return s.copyWith(
+        expenses: [...s.expenses]..removeAt(index),
+        pinnedQuickEntryIds: s.pinnedQuickEntryIds
+            .where((pinnedId) => pinnedId != id)
+            .toList(),
+      );
     });
     return saved ? removal : null;
   }
@@ -377,7 +415,10 @@ class ExpenseProvider with ChangeNotifier {
     allowRecovery: true,
   );
   Future<bool> importCsv(String source) => _mutate(
-    (s) => s.copyWith(expenses: _sorted(previewCsv(source))),
+    (s) => s.copyWith(
+      expenses: _sorted(previewCsv(source)),
+      pinnedQuickEntryIds: const [],
+    ),
     recovery: true,
     allowRecovery: true,
   );

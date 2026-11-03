@@ -68,6 +68,35 @@ void main() {
     expect(provider.monthlyRemainingCents, 500);
   });
 
+  test('pinned quick entries lead suggestions and survive reload', () async {
+    final provider = await createProvider();
+    final first = expense('first', 100, now);
+    final second = expense('second', 200, now);
+    await provider.addExpense(first);
+    await provider.addExpense(second);
+    expect(await provider.toggleQuickEntryPin('first'), isTrue);
+    expect(provider.quickEntries.first.id, 'first');
+    expect(provider.isQuickEntryPinned('first'), isTrue);
+
+    final reloaded = await createProvider();
+    expect(reloaded.quickEntries.first.id, 'first');
+    expect(reloaded.isQuickEntryPinned('first'), isTrue);
+    expect(await reloaded.toggleQuickEntryPin('first'), isTrue);
+    expect(reloaded.isQuickEntryPinned('first'), isFalse);
+  });
+
+  test('deleting a pinned entry removes its pin', () async {
+    final provider = await createProvider();
+    await provider.addExpense(expense('pinned', 100, now));
+    await provider.toggleQuickEntryPin('pinned');
+    expect(await provider.removeExpense('pinned'), isNotNull);
+    expect(provider.quickEntries, isEmpty);
+    expect(
+      provider.exportState(),
+      isNot(contains('"pinnedQuickEntryIds":["pinned"]')),
+    );
+  });
+
   test(
     'income changes net flow without changing spending budget or categories',
     () async {
