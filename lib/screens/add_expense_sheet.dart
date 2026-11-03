@@ -8,22 +8,20 @@ import '../providers/expense_provider.dart';
 import '../theme/app_theme.dart';
 import '../utils/currency_formatter.dart';
 import '../utils/expense_categories.dart';
-import '../utils/judgy_quotes.dart';
 import '../widgets/app_sheet.dart';
-import '../widgets/voice_entry_panel.dart';
-import '../services/voice_input_controller.dart';
+import '../widgets/quick_entry_strip.dart';
 
 class AddExpenseSheet extends StatefulWidget {
   const AddExpenseSheet({
     super.key,
     this.expense,
     this.duplicate = false,
-    this.voiceController,
+    this.suggestion,
   });
 
   final Expense? expense;
   final bool duplicate;
-  final VoiceInputController? voiceController;
+  final Expense? suggestion;
 
   @override
   State<AddExpenseSheet> createState() => _AddExpenseSheetState();
@@ -34,27 +32,34 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
   final _titleController = TextEditingController();
   final _amountController = TextEditingController();
   final _noteController = TextEditingController();
-  String _selectedCategory = ExpenseCategory.labels.first;
+  String _selectedCategory = 'Other';
   late DateTime _selectedDate;
   String? _submitError;
   bool _isSubmitting = false;
-  bool _showVoice = false;
+  bool _showDetails = false;
+  String _type = 'expense';
   late String _entryCurrency;
   String? _initialAmountText;
   String? _initialCurrency;
+  String? _selectedQuickEntryId;
 
   @override
   void initState() {
     super.initState();
-    final expense = widget.expense;
+    final expense = widget.expense ?? widget.suggestion;
+    _showDetails = widget.expense != null;
     final provider = context.read<ExpenseProvider>();
-    _selectedDate = widget.duplicate
+    _selectedDate = widget.duplicate || widget.suggestion != null
         ? provider.now
         : expense?.date ?? provider.now;
     _entryCurrency = provider.isUSD ? 'USD' : 'YER';
     if (expense != null) {
+      if (widget.suggestion != null) _selectedQuickEntryId = expense.id;
+      _type = expense.type;
       _titleController.text = expense.title;
-      _noteController.text = expense.note ?? '';
+      _noteController.text = widget.suggestion == null
+          ? expense.note ?? ''
+          : '';
       _selectedCategory = expense.category;
       final original = expense.originalCurrency;
       if ((original == 'USD' || original == 'YER') &&
@@ -72,6 +77,32 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
     }
   }
 
+  void _useQuickEntry(Expense entry) {
+    if (_isSubmitting) return;
+    final provider = context.read<ExpenseProvider>();
+    final original = entry.originalCurrency;
+    final currency = original == 'USD' || original == 'YER'
+        ? original!
+        : (provider.isUSD ? 'USD' : 'YER');
+    final amount = original == currency && entry.originalAmount != null
+        ? entry.originalAmount!
+        : currency == 'USD'
+        ? entry.amount
+        : entry.amount * provider.exchangeRate;
+    setState(() {
+      _selectedQuickEntryId = entry.id;
+      _type = entry.type;
+      _selectedCategory = entry.category;
+      _entryCurrency = currency;
+      _selectedDate = provider.now;
+      _showDetails = false;
+      _titleController.text = entry.title;
+      _amountController.text = amount.toStringAsFixed(2);
+      _noteController.clear();
+      _submitError = null;
+    });
+  }
+
   @override
   void dispose() {
     _titleController.dispose();
@@ -81,7 +112,7 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
   }
 
   Future<void> _submitData() async {
-    if (_isSubmitting || _showVoice || !_formKey.currentState!.validate()) {
+    if (_isSubmitting || !_formKey.currentState!.validate()) {
       return;
     }
 
@@ -110,6 +141,7 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
               date: _selectedDate,
               category: _selectedCategory,
               note: _noteController.text,
+              type: _type,
               originalAmountMinorUnits: original.originalAmountMinorUnits,
               originalCurrency: original.originalCurrency,
               exchangeRateAtEntry: original.exchangeRateAtEntry,
@@ -123,6 +155,7 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
               date: _selectedDate,
               category: _selectedCategory,
               note: _noteController.text,
+              type: _type,
             );
       final saved = isEditing
           ? await provider.updateExpense(expense)
@@ -134,8 +167,9 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
         if (isEditing) {
           Navigator.of(context).pop(true);
         } else {
-          final quote = JudgyQuotes.getQuote(_selectedCategory, expense.amount);
-          Navigator.of(context).pop(quote);
+          Navigator.of(
+            context,
+          ).pop(_type == 'income' ? 'Income saved.' : 'Expense saved.');
         }
       } else {
         setState(() {
@@ -160,12 +194,47 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
 
     return AppSheet(
       title: widget.expense == null
-          ? 'Add an expense'
+          ? widget.suggestion == null
+                ? 'Add a transaction'
+                : 'Add again'
           : widget.duplicate
-          ? 'Duplicate expense'
-          : 'Edit expense',
-      subtitle: 'A quick entry keeps the picture honest.',
-      closeLabel: 'Close add expense',
+          ? 'Duplicate transaction'
+          : 'Edit transaction',
+      closeLabel: 'Close transaction form',
+      footer: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_submitError != null) ...[
+            Semantics(
+              liveRegion: true,
+              child: Text(
+                _submitError!,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: AppColors.danger),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+          ],
+          FilledButton.icon(
+            onPressed: _isSubmitting ? null : _submitData,
+            icon: _isSubmitting
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.check),
+            label: Text(
+              _isSubmitting
+                  ? 'Saving…'
+                  : _type == 'income'
+                  ? 'Save income'
+                  : 'Save expense',
+            ),
+          ),
+        ],
+      ),
       child: Form(
         key: _formKey,
         autovalidateMode: AutovalidateMode.onUserInteraction,
@@ -173,39 +242,50 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (_showVoice)
-              VoiceEntryPanel(
-                controller: widget.voiceController,
-                onClose: () => setState(() => _showVoice = false),
-                onApply: (draft, currency) => setState(() {
-                  _titleController.text = draft.title;
-                  _amountController.text = draft.amount!.toString();
-                  _entryCurrency = currency;
-                  _selectedDate = draft.date;
-                  _selectedCategory = draft.category;
-                  _submitError = null;
-                  _showVoice = false;
-                }),
+            if (widget.expense == null && provider.quickEntries.isNotEmpty) ...[
+              QuickEntryStrip(
+                selectedId: _selectedQuickEntryId,
+                onSelected: _useQuickEntry,
               ),
+              const SizedBox(height: AppSpacing.lg),
+            ],
+            SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(
+                  value: 'expense',
+                  label: Text('Spent'),
+                  icon: Icon(Icons.arrow_upward),
+                ),
+                ButtonSegment(
+                  value: 'income',
+                  label: Text('Received'),
+                  icon: Icon(Icons.arrow_downward),
+                ),
+              ],
+              selected: {_type},
+              onSelectionChanged: _isSubmitting
+                  ? null
+                  : (selection) => setState(() {
+                      _type = selection.first;
+                      _selectedCategory = _type == 'income'
+                          ? 'Income'
+                          : 'Other';
+                    }),
+            ),
+            const SizedBox(height: AppSpacing.md),
             TextFormField(
               controller: _titleController,
               textCapitalization: TextCapitalization.sentences,
               textInputAction: TextInputAction.next,
               inputFormatters: [LengthLimitingTextInputFormatter(80)],
               decoration: InputDecoration(
-                labelText: 'Expense name',
-                hintText: 'Coffee, groceries, taxi…',
-                suffixIcon: IconButton(
-                  tooltip: 'Add by voice',
-                  onPressed: _isSubmitting
-                      ? null
-                      : () => setState(() => _showVoice = !_showVoice),
-                  icon: Icon(_showVoice ? Icons.mic : Icons.mic_none),
-                ),
+                labelText: _type == 'income'
+                    ? 'Where it came from'
+                    : 'What you bought',
               ),
               validator: (value) {
                 if (value == null || value.trim().isEmpty) {
-                  return 'Enter what you spent money on.';
+                  return 'Enter a name for this transaction.';
                 }
                 return null;
               },
@@ -249,31 +329,7 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
                 }
                 return null;
               },
-              onFieldSubmitted: (_) => FocusScope.of(context).unfocus(),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            OutlinedButton.icon(
-              onPressed: _isSubmitting
-                  ? null
-                  : () async {
-                      final picked = await showDatePicker(
-                        context: context,
-                        initialDate: _selectedDate.isAfter(provider.now)
-                            ? provider.now
-                            : _selectedDate,
-                        firstDate: DateTime(2000),
-                        lastDate: provider.now,
-                      );
-                      if (picked != null && mounted) {
-                        setState(() => _selectedDate = picked);
-                      }
-                    },
-              icon: const Icon(Icons.calendar_today_outlined),
-              label: Text(
-                MaterialLocalizations.of(
-                  context,
-                ).formatMediumDate(_selectedDate),
-              ),
+              onFieldSubmitted: (_) => _submitData(),
             ),
             const SizedBox(height: AppSpacing.md),
             DropdownButtonFormField<String>(
@@ -282,14 +338,20 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
               isExpanded: true,
               dropdownColor: AppColors.surfaceElevated,
               decoration: const InputDecoration(labelText: 'Category'),
-              items: {...ExpenseCategory.labels, _selectedCategory}
-                  .map(
-                    (category) => DropdownMenuItem(
-                      value: category,
-                      child: Text(category),
-                    ),
-                  )
-                  .toList(),
+              items:
+                  {
+                        ...(_type == 'income'
+                            ? ['Income', 'Salary', 'Gift', 'Refund', 'Other']
+                            : ExpenseCategory.labels),
+                        _selectedCategory,
+                      }
+                      .map(
+                        (category) => DropdownMenuItem(
+                          value: category,
+                          child: Text(category),
+                        ),
+                      )
+                      .toList(),
               onChanged: _isSubmitting
                   ? null
                   : (value) {
@@ -298,38 +360,51 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
                       }
                     },
             ),
-            const SizedBox(height: AppSpacing.md),
-            TextFormField(
-              controller: _noteController,
-              decoration: const InputDecoration(
-                labelText: 'Note (optional)',
-                hintText: 'Anything to remember',
+            const SizedBox(height: AppSpacing.xs),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: _isSubmitting
+                    ? null
+                    : () => setState(() => _showDetails = !_showDetails),
+                icon: Icon(
+                  _showDetails ? Icons.expand_less : Icons.expand_more,
+                ),
+                label: Text(_showDetails ? 'Fewer details' : 'Date and note'),
               ),
-              maxLines: 2,
             ),
-            if (_submitError != null) ...[
-              const SizedBox(height: AppSpacing.md),
-              Semantics(
-                liveRegion: true,
-                child: Text(
-                  _submitError!,
-                  style: Theme.of(
+            if (_showDetails) ...[
+              const SizedBox(height: AppSpacing.xs),
+              OutlinedButton.icon(
+                onPressed: _isSubmitting
+                    ? null
+                    : () async {
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: _selectedDate.isAfter(provider.now)
+                              ? provider.now
+                              : _selectedDate,
+                          firstDate: DateTime(2000),
+                          lastDate: provider.now,
+                        );
+                        if (picked != null && mounted) {
+                          setState(() => _selectedDate = picked);
+                        }
+                      },
+                icon: const Icon(Icons.calendar_today_outlined),
+                label: Text(
+                  MaterialLocalizations.of(
                     context,
-                  ).textTheme.bodyMedium?.copyWith(color: AppColors.danger),
+                  ).formatMediumDate(_selectedDate),
                 ),
               ),
+              const SizedBox(height: AppSpacing.md),
+              TextFormField(
+                controller: _noteController,
+                decoration: const InputDecoration(labelText: 'Note (optional)'),
+                maxLines: 2,
+              ),
             ],
-            const SizedBox(height: AppSpacing.lg),
-            FilledButton.icon(
-              onPressed: _isSubmitting || _showVoice ? null : _submitData,
-              icon: _isSubmitting
-                  ? const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.check),
-              label: Text(_isSubmitting ? 'Saving…' : 'Save expense'),
-            ),
           ],
         ),
       ),

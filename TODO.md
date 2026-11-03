@@ -19,7 +19,7 @@
 - [x] Add LICENSE, CI (flutter analyze + test), screenshots.
 
 ## Product (new)
-- [x] Voice quick-add parsing Arabic commands ("زيادة"/"ناقص") and add expense.
+- [x] Frequent transaction shortcuts and income tracking.
 - [x] Quick-add from notification / always-on surface for fast entry.
 - [ ] Keep personal tool efficient and low battery; avoid hardcoded values.
 
@@ -29,10 +29,8 @@
 
 ## Upgrade validation
 - [x] Search-integrated sorting and scrollable compact home layout.
-- [x] Arabic/English voice number words, explicit currency, transcript review, and record-then-transcribe lifecycle.
-- [x] Fully offline Whisper recognition with a bundled model; no system speech service or online audio.
+- [x] Removed voice entry and the bundled speech model.
 - [x] Import validation, atomic recurring application, reset protection, and CSV note preservation.
 - [x] Device lock gates loading, sheets, dialogs, and quick-add navigation.
-- [ ] Real Android device pass: recognition/dialects, offline model loading, unlock, file/share pickers, notifications.
-- [ ] Voice accuracy: base Whisper mishears Arabic names/dialects on short clips; evaluate `ggml-small-q5_1` and keep short audio/auto-stop tuning.
+- [ ] Real Android device pass: unlock, file/share pickers, notifications, and entry form layout.
 - [ ] Full Arabic UI localization, configurable category management, and a light theme.

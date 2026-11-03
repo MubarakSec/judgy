@@ -1,7 +1,7 @@
 # Judgy
 
-A local-first Android expense tracker built with Flutter. Record everyday spending,
-track a monthly budget, and view totals in USD or Yemeni riyals (YER).
+A local-first Android money tracker built with Flutter. Record spending and income,
+track a monthly spending budget, and view totals in USD or Yemeni riyals (YER).
 
 ## Daily use
 
@@ -9,40 +9,21 @@ track a monthly budget, and view totals in USD or Yemeni riyals (YER).
   search to order by date, amount, or name.
 - Filter by day, week, month, or a custom date range. Insights and recurring
   templates are in the top-bar overflow menu.
-- Edit, duplicate, annotate, and undo deleted expenses. Each entry has its own
+- Edit, duplicate, annotate, and undo deleted transactions. Each entry has its own
   currency; changing the display currency does not change saved amounts.
+- Use **Use again** shortcuts in the home screen or notification sheet. They
+  prefill the amount, currency, category, and name for review. Pin any transaction
+  from its menu to keep it at the front of quick add.
+- A basic entry needs a name and amount. Date and note stay under **Date and note**;
+  the keyboard's Done action saves a valid entry.
+- Mark an entry as **Spent** or **Received**. The home card shows both flows and
+  the net amount; income does not use the spending budget.
 - Apply recurring templates once per month, or enable auto-apply for due templates.
   Days 29–31 clamp to month end. Auto-apply checks on launch, resume, and enabling;
   it applies the current month, without backfilling missed months.
-
-## Voice entry
-
-Tap the microphone in the expense name field. Recognition runs fully offline with
-a bundled multilingual Whisper model and does not use the phone's speech service.
-Choose **Arabic** (the default), **English**, or experimental **Auto detect** in the
-voice options. Examples:
-
-- `قهوة مئتين وخمسين ريال أمس`
-- `coffee twenty five point five dollars yesterday`
-- `وفاء زيادة ٢٠٠`
-
-Review the transcript, amount, currency, date, and suggested category, then tap
-**Use entry**. The form remains editable; **Save expense** commits it. Missing or
-ambiguous amounts, mixed currencies, income, and refund/subtraction commands are
-blocked instead of silently becoming positive expenses. Judgy currently records
-spending, not income or balances owed by people. Number-word support covers common
-Arabic/English forms and needs dialect testing; it is not unrestricted
-natural-language understanding.
-
-The model is `ggml-base-q5_1.bin` (about 57 MB, multilingual). It is not committed
-to git; fetch it once with `tool/fetch_whisper_model.sh` before building. The app
-copies the bundled model into private app storage on first use. Audio never leaves
-the device, and no cloud AI service is used.
-
-The base model is fast and compact, but its Arabic accuracy is limited — especially
-for names, dialects, and short phrases. Auto language detection is also unreliable
-on short clips, so Arabic is the default. A larger Whisper small model is the next
-quality step; it needs a device test and a bigger bundled download.
+- On Android, tapping the persistent Quick add notification opens the entry sheet
+  over the current app. Saving or dismissing it returns to that app. Settings →
+  Quick add can turn the notification off.
 
 ## Storage, privacy, and recovery
 
@@ -66,18 +47,16 @@ quality step; it needs a device test and a bigger bundled download.
 ## Development
 
 ```sh
-tool/fetch_whisper_model.sh
 flutter pub get
 flutter analyze --no-pub
 flutter test --no-pub --concurrency=1
 flutter run
 ```
 
-Tests cover voice parsing/lifecycle, imports, failed writes, SQLite migration and
+Tests cover imports, failed writes, SQLite migration and
 transaction rollback, recurring concurrency/month-end rules, device-lock loading,
 notification navigation, and compact/large-text interactions. The offline model
-loader is exercised on a phone; microphone, biometrics, file/share pickers, and
-notification behavior still require a real phone.
+biometrics, file/share pickers, and notification behavior still require a real phone.
 
 ## Release signing
 

@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../providers/expense_provider.dart';
 import '../services/backup_files.dart';
 import '../services/local_snapshots.dart';
+import '../services/quick_add_notifications.dart';
 import '../theme/app_theme.dart';
 import '../utils/currency_formatter.dart';
 import '../widgets/app_sheet.dart';
@@ -94,6 +95,20 @@ class _SettingsSheetState extends State<SettingsSheet> {
     if (mounted) Navigator.of(context).pop(true);
   });
 
+  Future<void> _setQuickAddNotification(bool enabled) => _run(() async {
+    final provider = context.read<ExpenseProvider>();
+    _requireSaved(
+      await provider.setShowQuickAddNotification(enabled),
+      provider,
+    );
+    final applied = await QuickAddNotifications.syncQuickAdd(enabled);
+    if (enabled && !applied) {
+      _message(
+        'Allow Judgy notifications in Android settings to use quick add.',
+      );
+    }
+  });
+
   Future<bool> _confirm(String title, String message, String action) async =>
       await showDialog<bool>(
         context: context,
@@ -125,7 +140,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
         : p.previewBackup(source).expenses.length;
     if (!await _confirm(
           'Review restore',
-          '$name contains $count expenses. This will replace your ${p.expenses.length} current expenses${csv ? '' : ' and budget settings'}. A recovery copy of the current data will be kept. Device lock settings stay unchanged.',
+          '$name contains $count transactions. This will replace your ${p.expenses.length} current transactions${csv ? '' : ' and budget settings'}. A recovery copy of the current data will be kept. Device lock settings stay unchanged.',
           'Replace data',
         ) ||
         !mounted) {
@@ -135,7 +150,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
     if (!mounted) return;
     _rateController.text = p.exchangeRate.toString();
     _budgetController.text = p.monthlyBudget.toStringAsFixed(2);
-    _message('Restored $count expenses.');
+    _message('Restored $count transactions.');
   }
 
   Future<void> _restoreFile() => _run(() async {
@@ -188,7 +203,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
     if (!mounted) return;
     if (files.isEmpty) {
       _message(
-        'A local snapshot is saved on the first expense write each day.',
+        'A local snapshot is saved on the first transaction write each day.',
       );
       return;
     }
@@ -226,7 +241,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
   Future<void> _reset() => _run(() async {
     if (!await _confirm(
           'Reset all data?',
-          'This removes all expenses, recurring templates, recovery copies, and settings from this device. Export a backup first if you want to keep them.',
+          'This removes all transactions, recurring templates, recovery copies, and settings from this device. Export a backup first if you want to keep them.',
           'Reset all data',
         ) ||
         !mounted) {
@@ -311,6 +326,23 @@ class _SettingsSheetState extends State<SettingsSheet> {
           const SizedBox(height: AppSpacing.lg),
           ExpansionTile(
             tilePadding: EdgeInsets.zero,
+            leading: const Icon(Icons.add_circle_outline),
+            title: const Text('Quick add'),
+            subtitle: const Text('Access the entry sheet from notifications'),
+            children: [
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Keep quick add in notifications'),
+                subtitle: const Text(
+                  'Tap it to add over your current app. Turn it off to clear the notification.',
+                ),
+                value: p.showQuickAddNotification,
+                onChanged: disabled ? null : _setQuickAddNotification,
+              ),
+            ],
+          ),
+          ExpansionTile(
+            tilePadding: EdgeInsets.zero,
             leading: const Icon(Icons.shield_outlined),
             title: const Text('Privacy'),
             subtitle: const Text('Device unlock and local storage'),
@@ -327,7 +359,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
               const Padding(
                 padding: EdgeInsets.only(bottom: AppSpacing.md),
                 child: Text(
-                  'Expense records stay on this device. Voice recognition runs entirely offline using a bundled Whisper model.',
+                  'Transaction records stay on this device. Android cloud backup is disabled.',
                 ),
               ),
             ],
@@ -345,7 +377,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
                 leading: const Icon(Icons.ios_share_rounded),
                 title: const Text('Export backup'),
                 subtitle: const Text(
-                  'JSON · expenses, templates, and settings',
+                  'JSON · transactions, templates, and settings',
                 ),
                 onTap: disabled ? null : () => _export(),
               ),

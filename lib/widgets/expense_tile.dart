@@ -9,7 +9,7 @@ import '../theme/app_theme.dart';
 import '../utils/currency_formatter.dart';
 import '../utils/expense_categories.dart';
 
-enum _ExpenseAction { edit, duplicate, delete }
+enum _ExpenseAction { edit, duplicate, pin, delete }
 
 class ExpenseTile extends StatelessWidget {
   const ExpenseTile({super.key, required this.expense});
@@ -64,34 +64,58 @@ class ExpenseTile extends StatelessWidget {
       isScrollControlled: true,
       useSafeArea: true,
       backgroundColor: Colors.transparent,
-      barrierLabel: 'Close edit expense',
+      barrierLabel: 'Close edit transaction',
       builder: (_) => AddExpenseSheet(expense: expense),
     );
     if (updated == true && context.mounted) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Expense updated.')));
+      ).showSnackBar(const SnackBar(content: Text('Transaction updated.')));
     }
   }
 
   Future<void> _duplicate(BuildContext context) async {
-    final quote = await showModalBottomSheet<String>(
+    final message = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
       backgroundColor: Colors.transparent,
-      barrierLabel: 'Close duplicate expense',
+      barrierLabel: 'Close duplicate transaction',
       builder: (_) => AddExpenseSheet(expense: expense, duplicate: true),
     );
-    if (quote == null || !context.mounted) return;
+    if (message == null || !context.mounted) return;
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(SnackBar(content: Text('Duplicated. $quote')));
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _togglePin(
+    BuildContext context,
+    ExpenseProvider provider,
+    bool wasPinned,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final saved = await provider.toggleQuickEntryPin(expense.id);
+    if (!messenger.mounted) return;
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          saved
+              ? wasPinned
+                    ? 'Removed from quick add.'
+                    : 'Pinned to quick add.'
+              : provider.errorMessage ?? 'Quick entry could not be changed.',
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final provider = context.read<ExpenseProvider>();
+    final pinned = context.select<ExpenseProvider, bool>(
+      (p) => p.isQuickEntryPinned(expense.id),
+    );
     final isUSD = context.select<ExpenseProvider, bool>((p) => p.isUSD);
     final exchangeRate = context.select<ExpenseProvider, double>(
       (p) => p.exchangeRate,
@@ -145,7 +169,7 @@ class ExpenseTile extends StatelessWidget {
         container: true,
         explicitChildNodes: true,
         label:
-            '${expense.title}, ${expense.category}, $date, $amount'
+            '${expense.isIncome ? 'Received' : 'Spent'}, ${expense.title}, ${expense.category}, $date, $amount'
             '${originalAmount == null ? '' : ', entered $originalAmount'}',
         child: Container(
           margin: const EdgeInsets.only(bottom: AppSpacing.sm),
@@ -158,7 +182,6 @@ class ExpenseTile extends StatelessWidget {
           decoration: BoxDecoration(
             color: AppColors.surface,
             borderRadius: BorderRadius.circular(AppRadii.medium),
-            border: Border.all(color: AppColors.border),
           ),
           child: Row(
             children: [
@@ -171,9 +194,13 @@ class ExpenseTile extends StatelessWidget {
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
-                    _categoryIcon(expense.category),
+                    expense.isIncome
+                        ? Icons.arrow_downward_rounded
+                        : _categoryIcon(expense.category),
                     size: 21,
-                    color: AppColors.textPrimary,
+                    color: expense.isIncome
+                        ? AppColors.success
+                        : AppColors.textPrimary,
                   ),
                 ),
               ),
@@ -220,9 +247,14 @@ class ExpenseTile extends StatelessWidget {
                         fit: BoxFit.scaleDown,
                         alignment: Alignment.centerRight,
                         child: Text(
-                          '-$amount',
+                          '${expense.isIncome ? '+' : '-'}$amount',
                           maxLines: 1,
-                          style: Theme.of(context).textTheme.titleMedium,
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(
+                                color: expense.isIncome
+                                    ? AppColors.success
+                                    : null,
+                              ),
                         ),
                       ),
                       if (originalAmount != null) ...[
@@ -246,12 +278,14 @@ class ExpenseTile extends StatelessWidget {
                     _edit(context);
                   } else if (action == _ExpenseAction.duplicate) {
                     _duplicate(context);
+                  } else if (action == _ExpenseAction.pin) {
+                    _togglePin(context, provider, pinned);
                   } else if (action == _ExpenseAction.delete) {
                     _delete(context, provider);
                   }
                 },
-                itemBuilder: (context) => const [
-                  PopupMenuItem(
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
                     value: _ExpenseAction.edit,
                     child: Row(
                       children: [
@@ -261,7 +295,7 @@ class ExpenseTile extends StatelessWidget {
                       ],
                     ),
                   ),
-                  PopupMenuItem(
+                  const PopupMenuItem(
                     value: _ExpenseAction.duplicate,
                     child: Row(
                       children: [
@@ -272,6 +306,24 @@ class ExpenseTile extends StatelessWidget {
                     ),
                   ),
                   PopupMenuItem(
+                    value: _ExpenseAction.pin,
+                    child: Row(
+                      children: [
+                        Icon(
+                          pinned
+                              ? Icons.push_pin_rounded
+                              : Icons.push_pin_outlined,
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Flexible(
+                          child: Text(
+                            pinned ? 'Unpin quick entry' : 'Pin to quick add',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
                     value: _ExpenseAction.delete,
                     child: Row(
                       children: [

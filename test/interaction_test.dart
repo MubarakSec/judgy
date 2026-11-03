@@ -3,29 +3,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:judgy/main.dart';
 import 'package:judgy/models/expense.dart';
 import 'package:judgy/providers/expense_provider.dart';
-import 'package:judgy/screens/add_expense_sheet.dart';
-import 'package:judgy/services/voice_input_controller.dart';
-import 'package:judgy/theme/app_theme.dart';
+import 'package:judgy/widgets/expense_tile.dart';
 import 'package:provider/provider.dart';
 
 import 'support/memory_repository.dart';
-
-class TranscriptVoice extends VoiceInputController {
-  TranscriptVoice(this.phrase);
-  final String phrase;
-  @override
-  Future<void> start({required String locale, required bool onDevice}) async {
-    transcript = phrase;
-    isFinal = true;
-    isListening = false;
-    notifyListeners();
-  }
-
-  @override
-  Future<void> cancel() async {
-    isListening = false;
-  }
-}
 
 void main() {
   final now = DateTime(2026, 10, 25, 12);
@@ -70,7 +51,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Sort by'), findsNothing);
-    await tester.tap(find.byTooltip('Sort expenses'));
+    await tester.tap(find.byTooltip('Sort transactions'));
     await tester.pumpAndSettle();
     await tester.tap(
       find.ancestor(
@@ -80,15 +61,37 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(
-      tester.getTopLeft(find.text('Large lunch')).dy,
-      lessThan(tester.getTopLeft(find.text('Cheap coffee')).dy),
+      tester
+          .getTopLeft(
+            find.descendant(
+              of: find.byType(ExpenseTile),
+              matching: find.text('Large lunch'),
+            ),
+          )
+          .dy,
+      lessThan(
+        tester
+            .getTopLeft(
+              find.descendant(
+                of: find.byType(ExpenseTile),
+                matching: find.text('Cheap coffee'),
+              ),
+            )
+            .dy,
+      ),
     );
     await tester.enterText(find.byType(TextField).first, 'coffee');
     await tester.pumpAndSettle();
     expect(find.text('Large lunch'), findsNothing);
     await tester.tap(find.byTooltip('Clear search'));
     await tester.pumpAndSettle();
-    expect(find.text('Large lunch'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(ExpenseTile),
+        matching: find.text('Large lunch'),
+      ),
+      findsOneWidget,
+    );
   });
   testWidgets('small screen and large text remain scrollable with a keyboard', (
     tester,
@@ -101,14 +104,8 @@ void main() {
       ChangeNotifierProvider.value(value: p, child: const JudgyApp()),
     );
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
-      find.text('Add first expense'),
-      180,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
-    await tester.tap(find.text('Add first expense'));
+    await tester.tap(find.text('Add transaction'));
     await tester.pumpAndSettle();
     tester.view.viewInsets = const FakeViewPadding(bottom: 280);
     addTearDown(tester.view.resetViewInsets);
@@ -117,83 +114,6 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
-  testWidgets(
-    'voice preview does not overwrite an existing form without confirmation',
-    (tester) async {
-      size(tester);
-      final p = await provider();
-      await tester.pumpWidget(
-        ChangeNotifierProvider.value(
-          value: p,
-          child: MaterialApp(
-            theme: AppTheme.dark,
-            home: Scaffold(
-              body: AddExpenseSheet(
-                voiceController: TranscriptVoice('coffee please'),
-              ),
-            ),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      await tester.enterText(
-        find.widgetWithText(TextFormField, 'Expense name'),
-        'Manual lunch',
-      );
-      await tester.enterText(find.widgetWithText(TextFormField, 'Amount'), '7');
-      await tester.tap(find.byTooltip('Add by voice'));
-      await tester.pumpAndSettle();
-      expect(find.text('Manual lunch'), findsOneWidget);
-      expect(find.text('7'), findsOneWidget);
-      final use = tester.widget<FilledButton>(
-        find.widgetWithText(FilledButton, 'Use entry'),
-      );
-      expect(use.onPressed, isNull);
-      expect(p.expenses, isEmpty);
-    },
-  );
-  testWidgets(
-    'confirmed voice uses spoken currency and remains editable before saving',
-    (tester) async {
-      size(tester);
-      final p = await provider();
-      await p.toggleCurrency();
-      await tester.pumpWidget(
-        ChangeNotifierProvider.value(
-          value: p,
-          child: MaterialApp(
-            theme: AppTheme.dark,
-            home: Scaffold(
-              body: AddExpenseSheet(
-                voiceController: TranscriptVoice(
-                  'coffee four dollars yesterday',
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Add by voice'));
-      await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('Use entry'));
-      await tester.tap(find.text('Use entry'));
-      await tester.pumpAndSettle();
-      expect(find.text('coffee'), findsOneWidget);
-      expect(find.text('4.0'), findsOneWidget);
-      expect(p.expenses, isEmpty);
-      final dropdown = tester.widget<DropdownButton<String>>(
-        find.byType(DropdownButton<String>).first,
-      );
-      expect(dropdown.value, 'USD');
-      await tester.ensureVisible(find.text('Save expense'));
-      await tester.tap(find.text('Save expense'));
-      await tester.pumpAndSettle();
-      expect(p.expenses.single.amountCents, 400);
-      expect(p.expenses.single.originalCurrency, 'USD');
-      expect(p.expenses.single.date, DateTime(2026, 10, 24));
-    },
-  );
   testWidgets(
     'settings groups expand inside a sheet without hidden ink or layout errors',
     (tester) async {

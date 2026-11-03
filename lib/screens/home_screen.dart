@@ -8,6 +8,7 @@ import '../theme/app_theme.dart';
 import '../widgets/expense_tile.dart';
 import '../widgets/time_filter_tabs.dart';
 import '../widgets/total_spent_card.dart';
+import '../widgets/quick_entry_strip.dart';
 import '../models/expense.dart';
 import '../utils/currency_formatter.dart';
 import '../services/quick_add_notifications.dart';
@@ -69,7 +70,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           _openPendingAdd();
-          unawaited(_provider.reconcileRecurring());
+          unawaited(_refreshAfterResume());
         }
       });
     }
@@ -97,27 +98,37 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed &&
         _ready &&
         AppLockGate.sessionUnlocked.value) {
-      unawaited(_provider.reconcileRecurring());
+      unawaited(_refreshAfterResume());
     }
   }
 
-  Future<void> _openAddExpense(BuildContext context) async {
+  Future<void> _refreshAfterResume() async {
+    await _provider.refreshFromRepository();
+    if (mounted && AppLockGate.sessionUnlocked.value) {
+      await _provider.reconcileRecurring();
+    }
+  }
+
+  Future<void> _openAddExpense(
+    BuildContext context, {
+    Expense? suggestion,
+  }) async {
     if (_addSheetOpen || !_ready || !AppLockGate.sessionUnlocked.value) return;
     _addSheetOpen = true;
-    final quote = await showModalBottomSheet<String>(
+    final message = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
       backgroundColor: Colors.transparent,
-      barrierLabel: 'Close add expense',
-      builder: (_) => const AddExpenseSheet(),
+      barrierLabel: 'Close transaction form',
+      builder: (_) => AddExpenseSheet(suggestion: suggestion),
     );
     _addSheetOpen = false;
-    if (quote == null || !context.mounted) return;
+    if (message == null || !context.mounted) return;
 
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(SnackBar(content: Text('Saved. $quote')));
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _openSettings(BuildContext context) async {
@@ -226,31 +237,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   : () => _toggleCurrency(context, provider),
             ),
           ),
-          PopupMenuButton<String>(
-            tooltip: 'More options',
-            icon: const Icon(Icons.more_horiz_rounded),
-            onSelected: (value) => value == 'insights'
-                ? _openInsights(context)
-                : _openRecurring(context),
-            itemBuilder: (_) => const [
-              PopupMenuItem(
-                value: 'insights',
-                child: ListTile(
-                  leading: Icon(Icons.insights_outlined),
-                  title: Text('Spending insights'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
-              PopupMenuItem(
-                value: 'recurring',
-                child: ListTile(
-                  leading: Icon(Icons.repeat_outlined),
-                  title: Text('Recurring expenses'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
-            ],
-          ),
           IconButton(
             icon: const Icon(Icons.tune),
             tooltip: 'Budget and currency settings',
@@ -281,7 +267,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           controller: _searchController,
                           textInputAction: TextInputAction.search,
                           decoration: InputDecoration(
-                            hintText: 'Search expenses',
+                            hintText: 'Search transactions',
                             prefixIcon: const Icon(Icons.search_rounded),
                             suffixIcon: Row(
                               mainAxisSize: MainAxisSize.min,
@@ -296,7 +282,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                     }),
                                   ),
                                 PopupMenuButton<String>(
-                                  tooltip: 'Sort expenses',
+                                  tooltip: 'Sort transactions',
                                   initialValue: _sortMode,
                                   icon: Icon(
                                     Icons.sort_rounded,
@@ -340,12 +326,36 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         ],
                         const SizedBox(height: AppSpacing.md),
                         const TotalSpentCard(),
-                        const SizedBox(height: AppSpacing.lg),
-                        Text(
-                          'Recent expenses',
-                          style: Theme.of(context).textTheme.titleLarge,
+                        if (query.isEmpty &&
+                            provider.quickEntries.isNotEmpty) ...[
+                          const SizedBox(height: AppSpacing.md),
+                          QuickEntryStrip(
+                            onSelected: (entry) =>
+                                _openAddExpense(context, suggestion: entry),
+                          ),
+                        ],
+                        const SizedBox(height: AppSpacing.md),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'Recent transactions',
+                                style: Theme.of(context).textTheme.titleLarge,
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: 'Insights',
+                              onPressed: () => _openInsights(context),
+                              icon: const Icon(Icons.insights_outlined),
+                            ),
+                            IconButton(
+                              tooltip: 'Recurring expenses',
+                              onPressed: () => _openRecurring(context),
+                              icon: const Icon(Icons.repeat_outlined),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: AppSpacing.sm),
+                        const SizedBox(height: AppSpacing.xs),
                       ],
                     ),
                   ),
@@ -362,7 +372,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             period: query.isEmpty
                                 ? provider.timeFilter.toLowerCase()
                                 : 'matching "$_searchQuery"',
-                            onAdd: () => _openAddExpense(context),
                           ),
                         )
                       : SliverList.builder(
@@ -375,11 +384,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   const SliverToBoxAdapter(child: SizedBox(height: 104)),
               ],
             ),
-      floatingActionButton: !provider.isLoading && filtered.isNotEmpty
+      floatingActionButton: !provider.isLoading
           ? FloatingActionButton.extended(
               onPressed: () => _openAddExpense(context),
               icon: const Icon(Icons.add),
-              label: const Text('Add expense'),
+              label: const Text('Add transaction'),
             )
           : null,
     );
@@ -393,7 +402,7 @@ class _LoadingHome extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       liveRegion: true,
-      label: 'Loading expenses',
+      label: 'Loading transactions',
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
         child: Column(
@@ -474,15 +483,10 @@ class _StatusNotice extends StatelessWidget {
 }
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState({
-    required this.hasAnyExpenses,
-    required this.period,
-    required this.onAdd,
-  });
+  const _EmptyState({required this.hasAnyExpenses, required this.period});
 
   final bool hasAnyExpenses;
   final String period;
-  final VoidCallback onAdd;
 
   @override
   Widget build(BuildContext context) {
@@ -525,19 +529,11 @@ class _EmptyState extends StatelessWidget {
               const SizedBox(height: AppSpacing.xs),
               Text(
                 hasAnyExpenses
-                    ? 'Try another period, or add an expense now.'
-                    : 'Add your first expense to start seeing useful patterns.',
+                    ? 'Try another period, or add a transaction now.'
+                    : 'Add your first transaction to start seeing useful patterns.',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: AppColors.textSecondary,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              FilledButton.icon(
-                onPressed: onAdd,
-                icon: const Icon(Icons.add),
-                label: Text(
-                  hasAnyExpenses ? 'Add expense' : 'Add first expense',
                 ),
               ),
             ],

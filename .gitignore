@@ -56,4 +56,5 @@ refrences/
 
 # Gradle/JVM diagnostics
 /android/build/
+/android/.kotlin/
 *.hprof

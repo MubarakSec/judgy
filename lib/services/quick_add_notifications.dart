@@ -1,11 +1,13 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 class QuickAddNotifications {
   QuickAddNotifications._();
   static final _plugin = FlutterLocalNotificationsPlugin();
+  static const _quickAddChannel = MethodChannel('judgy/quick_add_notification');
   static final addRequests = ValueNotifier<int>(0);
   static bool _initialized = false;
 
@@ -34,7 +36,7 @@ class QuickAddNotifications {
     }
   }
 
-  static Future<String?> initialize() async {
+  static Future<String?> initialize({bool showQuickAdd = true}) async {
     if (!Platform.isAndroid) return null;
     try {
       await _plugin.initialize(
@@ -46,36 +48,31 @@ class QuickAddNotifications {
         },
       );
       _initialized = true;
-      final android = _plugin
-          .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin
-          >();
-      final allowed = await android?.requestNotificationsPermission();
-      if (allowed != false) {
-        await _plugin.show(
-          id: 1,
-          title: 'Judgy',
-          body: 'Tap to add an expense',
-          payload: 'add',
-          notificationDetails: const NotificationDetails(
-            android: AndroidNotificationDetails(
-              'judgy_quick_add',
-              'Quick add',
-              channelDescription: 'Add spending from the notification shade.',
-              importance: Importance.low,
-              priority: Priority.low,
-              ongoing: true,
-              autoCancel: false,
-            ),
-          ),
-        );
-      }
+      if (showQuickAdd) await syncQuickAdd(true);
       final details = await _plugin.getNotificationAppLaunchDetails();
       return details?.didNotificationLaunchApp == true
           ? details?.notificationResponse?.payload
           : null;
     } catch (_) {
       return null;
+    }
+  }
+
+  static Future<bool> syncQuickAdd(bool enabled) async {
+    if (!Platform.isAndroid) return true;
+    try {
+      if (enabled) {
+        final android = _plugin
+            .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin
+            >();
+        final allowed = await android?.requestNotificationsPermission();
+        if (allowed == false) return false;
+      }
+      await _quickAddChannel.invokeMethod(enabled ? 'show' : 'hide');
+      return true;
+    } catch (_) {
+      return false;
     }
   }
 }

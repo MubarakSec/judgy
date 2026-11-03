@@ -37,18 +37,18 @@ void main() {
           ),
         ),
       );
-      expect(find.text('Add first expense'), findsNothing);
+      expect(find.text('Add transaction'), findsNothing);
       loading.complete();
       await p.initialized;
       await tester.pump();
-      expect(find.text('Add first expense'), findsNothing);
-      expect(find.text('Add an expense'), findsNothing);
+      expect(find.text('Add transaction'), findsNothing);
+      expect(find.text('Add a transaction'), findsNothing);
       QuickAddNotifications.addRequests.value++;
       await tester.pump();
-      expect(find.text('Add an expense'), findsNothing);
+      expect(find.text('Add a transaction'), findsNothing);
       auth.complete(true);
       await tester.pumpAndSettle();
-      expect(find.text('Add an expense'), findsOneWidget);
+      expect(find.text('Add a transaction'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
@@ -80,10 +80,10 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Add first expense'));
+      await tester.tap(find.text('Add transaction'));
       await tester.pumpAndSettle();
       await tester.enterText(
-        find.widgetWithText(TextFormField, 'Expense name'),
+        find.widgetWithText(TextFormField, 'What you bought'),
         'Unsaved coffee',
       );
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);

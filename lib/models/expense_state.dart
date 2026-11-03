@@ -13,10 +13,10 @@ class ExpenseState {
     this.budgetCents = 50000,
     this.autoApplyRecurring = false,
     this.requireBiometric = false,
-    this.voiceLocale = 'ar',
-    this.voiceOnDevice = true,
     this.lastBudgetAlertLevel = 0,
     this.budgetAlertPeriod = 0,
+    this.pinnedQuickEntryIds = const [],
+    this.showQuickAddNotification = true,
   });
 
   final List<Expense> expenses;
@@ -26,10 +26,10 @@ class ExpenseState {
   final int budgetCents;
   final bool autoApplyRecurring;
   final bool requireBiometric;
-  final String voiceLocale;
-  final bool voiceOnDevice;
   final int lastBudgetAlertLevel;
   final int budgetAlertPeriod;
+  final List<String> pinnedQuickEntryIds;
+  final bool showQuickAddNotification;
 
   factory ExpenseState.decode(String source) {
     if (utf8.encode(source).length > 10 * 1024 * 1024) {
@@ -77,16 +77,26 @@ class ExpenseState {
       }
       recurring.add(item);
     }
+    final pinnedRaw = raw['pinnedQuickEntryIds'] ?? const [];
+    if (pinnedRaw is! List || pinnedRaw.length > 5) {
+      throw const FormatException('Invalid quick entry pins.');
+    }
+    final pinned = <String>[];
+    final pinnedIds = <String>{};
+    for (final id in pinnedRaw) {
+      if (id is! String ||
+          !expenses.any((e) => e.id == id) ||
+          !pinnedIds.add(id)) {
+        throw const FormatException('Invalid quick entry pin.');
+      }
+      pinned.add(id);
+    }
     bool flag(String key, bool fallback) {
       if (!raw.containsKey(key)) return fallback;
       if (raw[key] is! bool) throw FormatException('Invalid $key.');
       return raw[key] as bool;
     }
 
-    final locale = raw['voiceLocale'] ?? 'ar';
-    if (locale is! String || locale.length > 80) {
-      throw const FormatException('Invalid speech language.');
-    }
     return ExpenseState(
       expenses: List.unmodifiable(expenses),
       recurring: List.unmodifiable(recurring),
@@ -95,14 +105,14 @@ class ExpenseState {
       budgetCents: budget,
       autoApplyRecurring: flag('autoApplyRecurring', false),
       requireBiometric: flag('requireBiometric', false),
-      voiceLocale: locale.trim().isEmpty ? 'ar' : locale,
-      voiceOnDevice: flag('voiceOnDevice', true),
       lastBudgetAlertLevel: raw['lastBudgetAlertLevel'] is int
           ? raw['lastBudgetAlertLevel'] as int
           : 0,
       budgetAlertPeriod: raw['budgetAlertPeriod'] is int
           ? raw['budgetAlertPeriod'] as int
           : 0,
+      pinnedQuickEntryIds: List.unmodifiable(pinned),
+      showQuickAddNotification: flag('showQuickAddNotification', true),
     );
   }
 
@@ -115,10 +125,10 @@ class ExpenseState {
     'recurringExpenses': recurring.map((e) => e.toMap()).toList(),
     'autoApplyRecurring': autoApplyRecurring,
     'requireBiometric': requireBiometric,
-    'voiceLocale': voiceLocale,
-    'voiceOnDevice': voiceOnDevice,
     'lastBudgetAlertLevel': lastBudgetAlertLevel,
     'budgetAlertPeriod': budgetAlertPeriod,
+    'pinnedQuickEntryIds': pinnedQuickEntryIds,
+    'showQuickAddNotification': showQuickAddNotification,
   };
 
   String encode() => jsonEncode(toMap());
@@ -131,10 +141,10 @@ class ExpenseState {
     int? budgetCents,
     bool? autoApplyRecurring,
     bool? requireBiometric,
-    String? voiceLocale,
-    bool? voiceOnDevice,
     int? lastBudgetAlertLevel,
     int? budgetAlertPeriod,
+    List<String>? pinnedQuickEntryIds,
+    bool? showQuickAddNotification,
   }) => ExpenseState(
     expenses: expenses == null ? this.expenses : List.unmodifiable(expenses),
     recurring: recurring == null
@@ -145,9 +155,12 @@ class ExpenseState {
     budgetCents: budgetCents ?? this.budgetCents,
     autoApplyRecurring: autoApplyRecurring ?? this.autoApplyRecurring,
     requireBiometric: requireBiometric ?? this.requireBiometric,
-    voiceLocale: voiceLocale ?? this.voiceLocale,
-    voiceOnDevice: voiceOnDevice ?? this.voiceOnDevice,
     lastBudgetAlertLevel: lastBudgetAlertLevel ?? this.lastBudgetAlertLevel,
     budgetAlertPeriod: budgetAlertPeriod ?? this.budgetAlertPeriod,
+    pinnedQuickEntryIds: pinnedQuickEntryIds == null
+        ? this.pinnedQuickEntryIds
+        : List.unmodifiable(pinnedQuickEntryIds),
+    showQuickAddNotification:
+        showQuickAddNotification ?? this.showQuickAddNotification,
   );
 }

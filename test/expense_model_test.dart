@@ -16,6 +16,7 @@ void main() {
 
       expect(expense.amountCents, 1234);
       expect(expense.amount, 12.34);
+      expect(expense.isIncome, isFalse);
     });
 
     test('preserves YER entry metadata and exact USD cents', () {
@@ -51,6 +52,24 @@ void main() {
       expect(decoded.originalAmountMinorUnits, 4875);
       expect(decoded.originalCurrency, 'USD');
       expect(decoded.date, date);
+    });
+
+    test('round-trips income and rejects unknown transaction types', () {
+      final income = Expense.fromEnteredAmount(
+        id: 'pay',
+        title: 'Pay',
+        enteredAmount: 100,
+        currency: 'USD',
+        exchangeRate: 540,
+        date: date,
+        category: 'Salary',
+        type: 'income',
+      );
+      expect(Expense.fromJson(income.toJson()).isIncome, isTrue);
+      expect(
+        () => Expense.fromMap({...income.toMap(), 'type': 'transfer'}),
+        throwsArgumentError,
+      );
     });
 
     test('rejects empty titles and non-finite amounts', () {

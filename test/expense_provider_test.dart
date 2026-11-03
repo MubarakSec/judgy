@@ -68,6 +68,99 @@ void main() {
     expect(provider.monthlyRemainingCents, 500);
   });
 
+  test('pinned quick entries lead suggestions and survive reload', () async {
+    final provider = await createProvider();
+    final first = expense('first', 100, now);
+    final second = expense('second', 200, now);
+    await provider.addExpense(first);
+    await provider.addExpense(second);
+    expect(await provider.toggleQuickEntryPin('first'), isTrue);
+    expect(provider.quickEntries.first.id, 'first');
+    expect(provider.isQuickEntryPinned('first'), isTrue);
+
+    final reloaded = await createProvider();
+    expect(reloaded.quickEntries.first.id, 'first');
+    expect(reloaded.isQuickEntryPinned('first'), isTrue);
+    expect(await reloaded.toggleQuickEntryPin('first'), isTrue);
+    expect(reloaded.isQuickEntryPinned('first'), isFalse);
+  });
+
+  test(
+    'deleting a pinned entry removes its pin and undo restores it',
+    () async {
+      final provider = await createProvider();
+      await provider.addExpense(expense('pinned', 100, now));
+      await provider.toggleQuickEntryPin('pinned');
+      final removal = await provider.removeExpense('pinned');
+      expect(removal, isNotNull);
+      expect(provider.quickEntries, isEmpty);
+      expect(
+        provider.exportState(),
+        isNot(contains('"pinnedQuickEntryIds":["pinned"]')),
+      );
+      expect(await provider.restoreExpense(removal!), isTrue);
+      expect(provider.isQuickEntryPinned('pinned'), isTrue);
+    },
+  );
+
+  test(
+    'quick add notification preference stays local to this device',
+    () async {
+      final provider = await createProvider();
+      expect(await provider.setShowQuickAddNotification(false), isTrue);
+      final source = provider.exportState();
+      final reloaded = await createProvider();
+      expect(reloaded.showQuickAddNotification, isFalse);
+      final backup = jsonDecode(source) as Map<String, dynamic>;
+      backup['showQuickAddNotification'] = true;
+      expect(await reloaded.importState(jsonEncode(backup)), isTrue);
+      expect(reloaded.showQuickAddNotification, isFalse);
+      expect(await reloaded.resetStorage(), isTrue);
+      expect(reloaded.showQuickAddNotification, isFalse);
+    },
+  );
+
+  test('invalid pinned entries do not replace saved data', () async {
+    final provider = await createProvider();
+    await provider.addExpense(expense('saved', 100, now));
+    final before = provider.exportState();
+    final backup = jsonDecode(before) as Map<String, dynamic>;
+    backup['pinnedQuickEntryIds'] = ['missing'];
+    expect(await provider.importState(jsonEncode(backup)), isFalse);
+    expect(provider.exportState(), before);
+  });
+
+  test(
+    'income changes net flow without changing spending budget or categories',
+    () async {
+      final provider = await createProvider();
+      await provider.updateSettings(540, 10);
+      await provider.addExpense(expense('coffee', 200, now));
+      await provider.addExpense(
+        Expense(
+          id: 'pay',
+          title: 'Pay',
+          amountCents: 1000,
+          date: now,
+          category: 'Salary',
+          type: 'income',
+        ),
+      );
+      expect(provider.totalSpentCents, 200);
+      expect(provider.totalIncomeCents, 1000);
+      expect(provider.netCents, 800);
+      expect(provider.monthlySpentCents, 200);
+      expect(provider.monthlyIncomeCents, 1000);
+      expect(provider.monthlyRemainingCents, 800);
+      expect(provider.categoryTotals, {'Other': 200});
+      final restored = await createProvider();
+      expect(
+        restored.expenses.firstWhere((e) => e.id == 'pay').isIncome,
+        isTrue,
+      );
+    },
+  );
+
   test('persists one versioned state document and restores it', () async {
     final provider = await createProvider();
     await provider.updateSettings(600, 750);
@@ -132,7 +225,6 @@ void main() {
     expect(provider.errorMessage, isNotNull);
   });
 
-
   test('does not overwrite corrupt state when loading fails', () async {
     SharedPreferences.setMockInitialValues({
       'judgy_state_v2': '{not valid json',
@@ -154,22 +246,24 @@ void main() {
     expect(after, before);
   });
 
-  test('does not overwrite unsupported-version state when loading fails', () async {
-    SharedPreferences.setMockInitialValues({
-      'judgy_state_v2': '{"version":999,"expenses":[]}',
-    });
+  test(
+    'does not overwrite unsupported-version state when loading fails',
+    () async {
+      SharedPreferences.setMockInitialValues({
+        'judgy_state_v2': '{"version":999,"expenses":[]}',
+      });
 
-    final provider = ExpenseProvider(clock: () => now);
-    await provider.initialized;
+      final provider = ExpenseProvider(clock: () => now);
+      await provider.initialized;
 
-    expect(provider.loadFailed, isTrue);
+      expect(provider.loadFailed, isTrue);
 
-    final preferences = await SharedPreferences.getInstance();
-    final before = preferences.getString('judgy_state_v2');
+      final preferences = await SharedPreferences.getInstance();
+      final before = preferences.getString('judgy_state_v2');
 
-    final saved = await provider.addExpense(expense('new', 100, now));
-    expect(saved, isFalse);
-    expect(preferences.getString('judgy_state_v2'), before);
-  });
-
+      final saved = await provider.addExpense(expense('new', 100, now));
+      expect(saved, isFalse);
+      expect(preferences.getString('judgy_state_v2'), before);
+    },
+  );
 }

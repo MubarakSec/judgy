@@ -11,9 +11,14 @@ import '../services/quick_add_notifications.dart';
 import '../utils/expense_csv.dart';
 
 class ExpenseRemoval {
-  const ExpenseRemoval({required this.expense, required this.index});
+  const ExpenseRemoval({
+    required this.expense,
+    required this.index,
+    this.pinIndex = -1,
+  });
   final Expense expense;
   final int index;
+  final int pinIndex;
 }
 
 class ExpenseProvider with ChangeNotifier {
@@ -50,12 +55,63 @@ class ExpenseProvider with ChangeNotifier {
 
   UnmodifiableListView<Expense> get expenses =>
       UnmodifiableListView(_state.expenses);
+  List<Expense> get quickEntries {
+    final byId = {for (final expense in _state.expenses) expense.id: expense};
+    final pinned = _state.pinnedQuickEntryIds
+        .map((id) => byId[id])
+        .whereType<Expense>()
+        .toList();
+    final counts = <String, int>{};
+    final latest = <String, Expense>{};
+    for (final entry in _state.expenses) {
+      final key =
+          '${entry.type}|${entry.title.trim().toLowerCase()}|${entry.category}';
+      counts.update(key, (count) => count + 1, ifAbsent: () => 1);
+      latest.putIfAbsent(key, () => entry);
+    }
+    final keys = latest.keys.toList()
+      ..sort((a, b) {
+        final frequency = counts[b]!.compareTo(counts[a]!);
+        return frequency != 0
+            ? frequency
+            : latest[b]!.date.compareTo(latest[a]!.date);
+      });
+    final seen = pinned.map(_quickEntryKey).toSet();
+    for (final key in keys) {
+      if (pinned.length >= 5) break;
+      if (seen.add(key)) pinned.add(latest[key]!);
+    }
+    return pinned;
+  }
+
+  static String _quickEntryKey(Expense entry) =>
+      '${entry.type}|${entry.title.trim().toLowerCase()}|${entry.category}';
+
+  bool isQuickEntryPinned(String id) => _state.pinnedQuickEntryIds.contains(id);
+
+  Future<bool> toggleQuickEntryPin(String id) => _mutate((state) {
+    if (!state.expenses.any((entry) => entry.id == id)) {
+      throw const FormatException('Transaction no longer exists.');
+    }
+    final pins = [...state.pinnedQuickEntryIds];
+    if (pins.contains(id)) {
+      pins.remove(id);
+    } else {
+      if (pins.length >= 5) {
+        throw const FormatException(
+          'Keep up to five quick entries. Unpin one first.',
+        );
+      }
+      pins.insert(0, id);
+    }
+    return state.copyWith(pinnedQuickEntryIds: pins);
+  });
+
   UnmodifiableListView<RecurringExpense> get recurringExpenses =>
       UnmodifiableListView(_state.recurring);
   bool get autoApplyRecurring => _state.autoApplyRecurring;
   bool get requireBiometric => _state.requireBiometric;
-  String get voiceLocale => _state.voiceLocale;
-  bool get voiceOnDevice => _state.voiceOnDevice;
+  bool get showQuickAddNotification => _state.showQuickAddNotification;
   DateTime get now => _clock();
   bool get isUSD => _state.isUSD;
   double get exchangeRate => _state.exchangeRate;
@@ -88,17 +144,38 @@ class ExpenseProvider with ChangeNotifier {
         .toList();
   }
 
-  int get totalSpentCents =>
-      filteredExpenses.fold(0, (sum, e) => sum + e.amountCents);
+  int get totalSpentCents => filteredExpenses
+      .where((e) => !e.isIncome)
+      .fold(0, (sum, e) => sum + e.amountCents);
+  int get totalIncomeCents => filteredExpenses
+      .where((e) => e.isIncome)
+      .fold(0, (sum, e) => sum + e.amountCents);
+  int get netCents => totalIncomeCents - totalSpentCents;
   int _monthlyTotal(ExpenseState state) {
     final current = now;
     final start = DateTime(current.year, current.month);
     return state.expenses
-        .where((e) => !e.date.isBefore(start) && !e.date.isAfter(current))
+        .where(
+          (e) =>
+              !e.isIncome &&
+              !e.date.isBefore(start) &&
+              !e.date.isAfter(current),
+        )
         .fold(0, (sum, e) => sum + e.amountCents);
   }
 
   int get monthlySpentCents => _monthlyTotal(_state);
+  int get monthlyIncomeCents {
+    final current = now;
+    final start = DateTime(current.year, current.month);
+    return _state.expenses
+        .where(
+          (e) =>
+              e.isIncome && !e.date.isBefore(start) && !e.date.isAfter(current),
+        )
+        .fold(0, (sum, e) => sum + e.amountCents);
+  }
+
   int get monthlyRemainingCents => monthlyBudgetCents - monthlySpentCents;
   double get budgetProgress => monthlyBudgetCents <= 0
       ? 0
@@ -109,7 +186,7 @@ class ExpenseProvider with ChangeNotifier {
     final start = DateTime(now.year, now.month);
     final totals = <String, int>{};
     for (final e in _state.expenses) {
-      if (e.date.isBefore(start) || e.date.isAfter(now)) continue;
+      if (e.isIncome || e.date.isBefore(start) || e.date.isAfter(now)) continue;
       totals.update(
         e.category,
         (value) => value + e.amountCents,
@@ -123,7 +200,9 @@ class ExpenseProvider with ChangeNotifier {
     final start = DateTime(now.year, now.month - 1);
     final end = DateTime(now.year, now.month);
     return _state.expenses
-        .where((e) => !e.date.isBefore(start) && e.date.isBefore(end))
+        .where(
+          (e) => !e.isIncome && !e.date.isBefore(start) && e.date.isBefore(end),
+        )
         .fold(0, (sum, e) => sum + e.amountCents);
   }
 
@@ -142,7 +221,9 @@ class ExpenseProvider with ChangeNotifier {
     );
     final start = DateTime(current.year, current.month - 1);
     return _state.expenses
-        .where((e) => !e.date.isBefore(start) && !e.date.isAfter(end))
+        .where(
+          (e) => !e.isIncome && !e.date.isBefore(start) && !e.date.isAfter(end),
+        )
         .fold(0, (sum, e) => sum + e.amountCents);
   }
 
@@ -201,11 +282,8 @@ class ExpenseProvider with ChangeNotifier {
 
   Future<bool> setRequireBiometric(bool value) =>
       _mutate((s) => s.copyWith(requireBiometric: value));
-  Future<bool> setVoicePreferences({
-    required String locale,
-    required bool onDevice,
-  }) =>
-      _mutate((s) => s.copyWith(voiceLocale: locale, voiceOnDevice: onDevice));
+  Future<bool> setShowQuickAddNotification(bool value) =>
+      _mutate((s) => s.copyWith(showQuickAddNotification: value));
   Future<bool> setAutoApplyRecurring(bool value) => _mutate((s) {
     final updated = s.copyWith(autoApplyRecurring: value);
     return value ? _dueRecurring(updated) : updated;
@@ -232,15 +310,33 @@ class ExpenseProvider with ChangeNotifier {
     final saved = await _mutate((s) {
       final index = s.expenses.indexWhere((e) => e.id == id);
       if (index < 0) throw const FormatException('Expense no longer exists.');
-      removal = ExpenseRemoval(expense: s.expenses[index], index: index);
-      return s.copyWith(expenses: [...s.expenses]..removeAt(index));
+      removal = ExpenseRemoval(
+        expense: s.expenses[index],
+        index: index,
+        pinIndex: s.pinnedQuickEntryIds.indexOf(id),
+      );
+      return s.copyWith(
+        expenses: [...s.expenses]..removeAt(index),
+        pinnedQuickEntryIds: s.pinnedQuickEntryIds
+            .where((pinnedId) => pinnedId != id)
+            .toList(),
+      );
     });
     return saved ? removal : null;
   }
 
   Future<bool> restoreExpense(ExpenseRemoval removal) => _mutate((s) {
     if (s.expenses.any((e) => e.id == removal.expense.id)) return s;
-    return s.copyWith(expenses: _sorted([...s.expenses, removal.expense]));
+    final pins = [...s.pinnedQuickEntryIds];
+    if (removal.pinIndex >= 0 &&
+        pins.length < 5 &&
+        !pins.contains(removal.expense.id)) {
+      pins.insert(removal.pinIndex.clamp(0, pins.length), removal.expense.id);
+    }
+    return s.copyWith(
+      expenses: _sorted([...s.expenses, removal.expense]),
+      pinnedQuickEntryIds: pins,
+    );
   });
   Future<bool> addRecurring(RecurringExpense item) => _mutate((s) {
     item.validate();
@@ -335,18 +431,52 @@ class ExpenseProvider with ChangeNotifier {
   }
 
   Future<bool> importState(String source) => _mutate(
-    (s) => previewBackup(source).copyWith(requireBiometric: s.requireBiometric),
+    (s) => previewBackup(source).copyWith(
+      requireBiometric: s.requireBiometric,
+      showQuickAddNotification: s.showQuickAddNotification,
+    ),
     recovery: true,
     allowRecovery: true,
   );
   Future<bool> importCsv(String source) => _mutate(
-    (s) => s.copyWith(expenses: _sorted(previewCsv(source))),
+    (s) => s.copyWith(
+      expenses: _sorted(previewCsv(source)),
+      pinnedQuickEntryIds: const [],
+    ),
     recovery: true,
     allowRecovery: true,
   );
   Future<String?> recoveryBackup() => _repository.readRecovery();
-  Future<bool> resetStorage() =>
-      _mutate((_) => const ExpenseState(), allowRecovery: true, reset: true);
+  Future<bool> resetStorage() => _mutate(
+    (s) => ExpenseState(showQuickAddNotification: s.showQuickAddNotification),
+    allowRecovery: true,
+    reset: true,
+  );
+
+  Future<void> refreshFromRepository() async {
+    await initialized;
+    final completer = Completer<void>();
+    _queue = _queue.then((_) async {
+      try {
+        final source = await _repository.read();
+        if (source != null) {
+          final latest = ExpenseState.decode(source);
+          if (latest.encode() != _state.encode()) {
+            _state = latest;
+            _loadFailed = false;
+            _warningMessage = null;
+            _notify();
+          }
+        }
+      } catch (_) {
+        _errorMessage = 'Saved data could not be refreshed.';
+        _notify();
+      } finally {
+        completer.complete();
+      }
+    });
+    return completer.future;
+  }
 
   Future<bool> _mutate(
     ExpenseState Function(ExpenseState) change, {
@@ -365,6 +495,10 @@ class ExpenseProvider with ChangeNotifier {
           throw const FormatException(
             'Saved data could not be opened. Restore a valid backup or reset before making changes.',
           );
+        }
+        if (!_loadFailed) {
+          final source = await _repository.read();
+          if (source != null) _state = ExpenseState.decode(source);
         }
         var next = change(_state);
         if (identical(next, _state)) {
