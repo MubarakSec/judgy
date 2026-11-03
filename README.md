@@ -12,6 +12,8 @@ track a monthly spending budget, and view totals in USD or Yemeni riyals (YER).
 - Edit, duplicate, annotate, and undo deleted transactions. Each entry has its own
   currency; changing the display currency does not change saved amounts.
 - Use **Add again** shortcuts for frequent entries. They prefill the form for review.
+- A basic entry needs a name and amount. Date and note stay under **Date and note**;
+  the keyboard's Done action saves a valid entry.
 - Mark an entry as **Spent** or **Received**. The home card shows both flows and
   the net amount; income does not use the spending budget.
 - Apply recurring templates once per month, or enable auto-apply for due templates.

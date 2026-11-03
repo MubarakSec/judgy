@@ -135,6 +135,33 @@ void main() {
     );
   });
 
+  testWidgets(
+    'keyboard Done saves a basic transaction without opening details',
+    (tester) async {
+      final provider = await pumpApp(tester);
+      await tester.tap(find.text('Add transaction'));
+      await tester.pumpAndSettle();
+      expect(find.text('Date and note'), findsOneWidget);
+      expect(
+        find.widgetWithText(TextFormField, 'Note (optional)'),
+        findsNothing,
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'What you bought'),
+        'Bus fare',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Amount'),
+        '2.50',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(provider.expenses.single.title, 'Bus fare');
+      expect(provider.expenses.single.amountCents, 250);
+      expect(provider.expenses.single.category, 'Other');
+    },
+  );
+
   testWidgets('Add again prefills a recent entry with today as the date', (
     tester,
   ) async {

@@ -318,35 +318,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         ],
                         const SizedBox(height: AppSpacing.md),
                         const TotalSpentCard(),
-                        const SizedBox(height: AppSpacing.sm),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                onPressed: () => _openInsights(context),
-                                icon: const Icon(
-                                  Icons.insights_outlined,
-                                  size: 18,
-                                ),
-                                label: const Text('Insights'),
-                              ),
-                            ),
-                            const SizedBox(width: AppSpacing.sm),
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                onPressed: () => _openRecurring(context),
-                                icon: const Icon(
-                                  Icons.repeat_outlined,
-                                  size: 18,
-                                ),
-                                label: const Text('Recurring'),
-                              ),
-                            ),
-                          ],
-                        ),
                         if (query.isEmpty &&
                             provider.quickEntries.isNotEmpty) ...[
-                          const SizedBox(height: AppSpacing.lg),
+                          const SizedBox(height: AppSpacing.md),
                           Text(
                             'Add again',
                             style: Theme.of(context).textTheme.titleMedium,
@@ -378,12 +352,28 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             ),
                           ),
                         ],
-                        const SizedBox(height: AppSpacing.lg),
-                        Text(
-                          'Recent transactions',
-                          style: Theme.of(context).textTheme.titleLarge,
+                        const SizedBox(height: AppSpacing.md),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'Recent transactions',
+                                style: Theme.of(context).textTheme.titleLarge,
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: 'Insights',
+                              onPressed: () => _openInsights(context),
+                              icon: const Icon(Icons.insights_outlined),
+                            ),
+                            IconButton(
+                              tooltip: 'Recurring expenses',
+                              onPressed: () => _openRecurring(context),
+                              icon: const Icon(Icons.repeat_outlined),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: AppSpacing.sm),
+                        const SizedBox(height: AppSpacing.xs),
                       ],
                     ),
                   ),

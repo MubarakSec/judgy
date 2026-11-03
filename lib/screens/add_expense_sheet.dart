@@ -35,6 +35,7 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
   late DateTime _selectedDate;
   String? _submitError;
   bool _isSubmitting = false;
+  bool _showDetails = false;
   String _type = 'expense';
   late String _entryCurrency;
   String? _initialAmountText;
@@ -44,6 +45,7 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
   void initState() {
     super.initState();
     final expense = widget.expense ?? widget.suggestion;
+    _showDetails = widget.expense != null;
     final provider = context.read<ExpenseProvider>();
     _selectedDate = widget.duplicate || widget.suggestion != null
         ? provider.now
@@ -169,7 +171,6 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
           : widget.duplicate
           ? 'Duplicate transaction'
           : 'Edit transaction',
-      subtitle: 'Record money going out or coming in.',
       closeLabel: 'Close transaction form',
       child: Form(
         key: _formKey,
@@ -211,9 +212,6 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
                 labelText: _type == 'income'
                     ? 'Where it came from'
                     : 'What you bought',
-                hintText: _type == 'income'
-                    ? 'Pay, gift, refund…'
-                    : 'Coffee, groceries, taxi…',
               ),
               validator: (value) {
                 if (value == null || value.trim().isEmpty) {
@@ -261,31 +259,7 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
                 }
                 return null;
               },
-              onFieldSubmitted: (_) => FocusScope.of(context).unfocus(),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            OutlinedButton.icon(
-              onPressed: _isSubmitting
-                  ? null
-                  : () async {
-                      final picked = await showDatePicker(
-                        context: context,
-                        initialDate: _selectedDate.isAfter(provider.now)
-                            ? provider.now
-                            : _selectedDate,
-                        firstDate: DateTime(2000),
-                        lastDate: provider.now,
-                      );
-                      if (picked != null && mounted) {
-                        setState(() => _selectedDate = picked);
-                      }
-                    },
-              icon: const Icon(Icons.calendar_today_outlined),
-              label: Text(
-                MaterialLocalizations.of(
-                  context,
-                ).formatMediumDate(_selectedDate),
-              ),
+              onFieldSubmitted: (_) => _submitData(),
             ),
             const SizedBox(height: AppSpacing.md),
             DropdownButtonFormField<String>(
@@ -316,15 +290,51 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
                       }
                     },
             ),
-            const SizedBox(height: AppSpacing.md),
-            TextFormField(
-              controller: _noteController,
-              decoration: const InputDecoration(
-                labelText: 'Note (optional)',
-                hintText: 'Anything to remember',
+            const SizedBox(height: AppSpacing.xs),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: _isSubmitting
+                    ? null
+                    : () => setState(() => _showDetails = !_showDetails),
+                icon: Icon(
+                  _showDetails ? Icons.expand_less : Icons.expand_more,
+                ),
+                label: Text(_showDetails ? 'Fewer details' : 'Date and note'),
               ),
-              maxLines: 2,
             ),
+            if (_showDetails) ...[
+              const SizedBox(height: AppSpacing.xs),
+              OutlinedButton.icon(
+                onPressed: _isSubmitting
+                    ? null
+                    : () async {
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: _selectedDate.isAfter(provider.now)
+                              ? provider.now
+                              : _selectedDate,
+                          firstDate: DateTime(2000),
+                          lastDate: provider.now,
+                        );
+                        if (picked != null && mounted) {
+                          setState(() => _selectedDate = picked);
+                        }
+                      },
+                icon: const Icon(Icons.calendar_today_outlined),
+                label: Text(
+                  MaterialLocalizations.of(
+                    context,
+                  ).formatMediumDate(_selectedDate),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              TextFormField(
+                controller: _noteController,
+                decoration: const InputDecoration(labelText: 'Note (optional)'),
+                maxLines: 2,
+              ),
+            ],
             if (_submitError != null) ...[
               const SizedBox(height: AppSpacing.md),
               Semantics(
@@ -337,7 +347,7 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
                 ),
               ),
             ],
-            const SizedBox(height: AppSpacing.lg),
+            const SizedBox(height: AppSpacing.md),
             FilledButton.icon(
               onPressed: _isSubmitting ? null : _submitData,
               icon: _isSubmitting
