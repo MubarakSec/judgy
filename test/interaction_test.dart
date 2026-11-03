@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:judgy/main.dart';
 import 'package:judgy/models/expense.dart';
+import 'package:judgy/models/transaction_browser.dart';
 import 'package:judgy/providers/expense_provider.dart';
 import 'package:judgy/widgets/expense_tile.dart';
 import 'package:provider/provider.dart';
@@ -56,7 +57,7 @@ void main() {
     await tester.tap(
       find.ancestor(
         of: find.text('Highest amount'),
-        matching: find.byType(CheckedPopupMenuItem<String>),
+        matching: find.byType(CheckedPopupMenuItem<TransactionSort>),
       ),
     );
     await tester.pumpAndSettle();
@@ -89,6 +90,79 @@ void main() {
       find.descendant(
         of: find.byType(ExpenseTile),
         matching: find.text('Large lunch'),
+      ),
+      findsOneWidget,
+    );
+  });
+  testWidgets('transaction type filter keeps search and summary separate', (
+    tester,
+  ) async {
+    size(tester);
+    final p = await provider();
+    await p.addExpense(
+      Expense(
+        id: 'lunch',
+        title: 'Lunch',
+        amountCents: 1200,
+        date: now,
+        category: 'Food',
+      ),
+    );
+    await p.addExpense(
+      Expense(
+        id: 'pay',
+        title: 'Pay',
+        amountCents: 30000,
+        date: now,
+        category: 'Salary',
+        type: 'income',
+      ),
+    );
+    await tester.pumpWidget(
+      ChangeNotifierProvider.value(value: p, child: const JudgyApp()),
+    );
+    await tester.pumpAndSettle();
+    final receivedFilter = find.descendant(
+      of: find.byType(SegmentedButton<TransactionKind>),
+      matching: find.text('Received'),
+    );
+    await tester.ensureVisible(receivedFilter);
+    await tester.tap(receivedFilter);
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<SegmentedButton<TransactionKind>>(
+            find.byType(SegmentedButton<TransactionKind>),
+          )
+          .selected,
+      {TransactionKind.received},
+    );
+    expect(
+      find.descendant(of: find.byType(ExpenseTile), matching: find.text('Pay')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byType(ExpenseTile),
+        matching: find.text('Lunch'),
+      ),
+      findsNothing,
+    );
+    expect(find.text(r'$12.00'), findsWidgets);
+    await tester.enterText(find.byType(TextField).first, 'lunch');
+    await tester.pumpAndSettle();
+    expect(find.text('No matches for "lunch"'), findsOneWidget);
+    await tester.tap(
+      find.descendant(
+        of: find.byType(SegmentedButton<TransactionKind>),
+        matching: find.text('All'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(
+        of: find.byType(ExpenseTile),
+        matching: find.text('Lunch'),
       ),
       findsOneWidget,
     );
