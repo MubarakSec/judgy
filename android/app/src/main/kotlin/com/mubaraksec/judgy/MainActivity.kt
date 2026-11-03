@@ -17,11 +17,16 @@ class MainActivity : FlutterFragmentActivity() {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "judgy/quick_add_notification")
             .setMethodCallHandler { call, result ->
-                if (call.method == "show") {
-                    showQuickAddNotification()
-                    result.success(null)
-                } else {
-                    result.notImplemented()
+                when (call.method) {
+                    "show" -> {
+                        showQuickAddNotification()
+                        result.success(null)
+                    }
+                    "hide" -> {
+                        getSystemService(NotificationManager::class.java).cancel(1)
+                        result.success(null)
+                    }
+                    else -> result.notImplemented()
                 }
             }
     }

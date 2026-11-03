@@ -85,16 +85,49 @@ void main() {
     expect(reloaded.isQuickEntryPinned('first'), isFalse);
   });
 
-  test('deleting a pinned entry removes its pin', () async {
+  test(
+    'deleting a pinned entry removes its pin and undo restores it',
+    () async {
+      final provider = await createProvider();
+      await provider.addExpense(expense('pinned', 100, now));
+      await provider.toggleQuickEntryPin('pinned');
+      final removal = await provider.removeExpense('pinned');
+      expect(removal, isNotNull);
+      expect(provider.quickEntries, isEmpty);
+      expect(
+        provider.exportState(),
+        isNot(contains('"pinnedQuickEntryIds":["pinned"]')),
+      );
+      expect(await provider.restoreExpense(removal!), isTrue);
+      expect(provider.isQuickEntryPinned('pinned'), isTrue);
+    },
+  );
+
+  test(
+    'quick add notification preference stays local to this device',
+    () async {
+      final provider = await createProvider();
+      expect(await provider.setShowQuickAddNotification(false), isTrue);
+      final source = provider.exportState();
+      final reloaded = await createProvider();
+      expect(reloaded.showQuickAddNotification, isFalse);
+      final backup = jsonDecode(source) as Map<String, dynamic>;
+      backup['showQuickAddNotification'] = true;
+      expect(await reloaded.importState(jsonEncode(backup)), isTrue);
+      expect(reloaded.showQuickAddNotification, isFalse);
+      expect(await reloaded.resetStorage(), isTrue);
+      expect(reloaded.showQuickAddNotification, isFalse);
+    },
+  );
+
+  test('invalid pinned entries do not replace saved data', () async {
     final provider = await createProvider();
-    await provider.addExpense(expense('pinned', 100, now));
-    await provider.toggleQuickEntryPin('pinned');
-    expect(await provider.removeExpense('pinned'), isNotNull);
-    expect(provider.quickEntries, isEmpty);
-    expect(
-      provider.exportState(),
-      isNot(contains('"pinnedQuickEntryIds":["pinned"]')),
-    );
+    await provider.addExpense(expense('saved', 100, now));
+    final before = provider.exportState();
+    final backup = jsonDecode(before) as Map<String, dynamic>;
+    backup['pinnedQuickEntryIds'] = ['missing'];
+    expect(await provider.importState(jsonEncode(backup)), isFalse);
+    expect(provider.exportState(), before);
   });
 
   test(

@@ -11,9 +11,14 @@ import '../services/quick_add_notifications.dart';
 import '../utils/expense_csv.dart';
 
 class ExpenseRemoval {
-  const ExpenseRemoval({required this.expense, required this.index});
+  const ExpenseRemoval({
+    required this.expense,
+    required this.index,
+    this.pinIndex = -1,
+  });
   final Expense expense;
   final int index;
+  final int pinIndex;
 }
 
 class ExpenseProvider with ChangeNotifier {
@@ -106,6 +111,7 @@ class ExpenseProvider with ChangeNotifier {
       UnmodifiableListView(_state.recurring);
   bool get autoApplyRecurring => _state.autoApplyRecurring;
   bool get requireBiometric => _state.requireBiometric;
+  bool get showQuickAddNotification => _state.showQuickAddNotification;
   DateTime get now => _clock();
   bool get isUSD => _state.isUSD;
   double get exchangeRate => _state.exchangeRate;
@@ -276,6 +282,8 @@ class ExpenseProvider with ChangeNotifier {
 
   Future<bool> setRequireBiometric(bool value) =>
       _mutate((s) => s.copyWith(requireBiometric: value));
+  Future<bool> setShowQuickAddNotification(bool value) =>
+      _mutate((s) => s.copyWith(showQuickAddNotification: value));
   Future<bool> setAutoApplyRecurring(bool value) => _mutate((s) {
     final updated = s.copyWith(autoApplyRecurring: value);
     return value ? _dueRecurring(updated) : updated;
@@ -302,7 +310,11 @@ class ExpenseProvider with ChangeNotifier {
     final saved = await _mutate((s) {
       final index = s.expenses.indexWhere((e) => e.id == id);
       if (index < 0) throw const FormatException('Expense no longer exists.');
-      removal = ExpenseRemoval(expense: s.expenses[index], index: index);
+      removal = ExpenseRemoval(
+        expense: s.expenses[index],
+        index: index,
+        pinIndex: s.pinnedQuickEntryIds.indexOf(id),
+      );
       return s.copyWith(
         expenses: [...s.expenses]..removeAt(index),
         pinnedQuickEntryIds: s.pinnedQuickEntryIds
@@ -315,7 +327,16 @@ class ExpenseProvider with ChangeNotifier {
 
   Future<bool> restoreExpense(ExpenseRemoval removal) => _mutate((s) {
     if (s.expenses.any((e) => e.id == removal.expense.id)) return s;
-    return s.copyWith(expenses: _sorted([...s.expenses, removal.expense]));
+    final pins = [...s.pinnedQuickEntryIds];
+    if (removal.pinIndex >= 0 &&
+        pins.length < 5 &&
+        !pins.contains(removal.expense.id)) {
+      pins.insert(removal.pinIndex.clamp(0, pins.length), removal.expense.id);
+    }
+    return s.copyWith(
+      expenses: _sorted([...s.expenses, removal.expense]),
+      pinnedQuickEntryIds: pins,
+    );
   });
   Future<bool> addRecurring(RecurringExpense item) => _mutate((s) {
     item.validate();
@@ -410,7 +431,10 @@ class ExpenseProvider with ChangeNotifier {
   }
 
   Future<bool> importState(String source) => _mutate(
-    (s) => previewBackup(source).copyWith(requireBiometric: s.requireBiometric),
+    (s) => previewBackup(source).copyWith(
+      requireBiometric: s.requireBiometric,
+      showQuickAddNotification: s.showQuickAddNotification,
+    ),
     recovery: true,
     allowRecovery: true,
   );
@@ -423,8 +447,11 @@ class ExpenseProvider with ChangeNotifier {
     allowRecovery: true,
   );
   Future<String?> recoveryBackup() => _repository.readRecovery();
-  Future<bool> resetStorage() =>
-      _mutate((_) => const ExpenseState(), allowRecovery: true, reset: true);
+  Future<bool> resetStorage() => _mutate(
+    (s) => ExpenseState(showQuickAddNotification: s.showQuickAddNotification),
+    allowRecovery: true,
+    reset: true,
+  );
 
   Future<void> refreshFromRepository() async {
     await initialized;

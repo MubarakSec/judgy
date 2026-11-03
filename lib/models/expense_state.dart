@@ -16,6 +16,7 @@ class ExpenseState {
     this.lastBudgetAlertLevel = 0,
     this.budgetAlertPeriod = 0,
     this.pinnedQuickEntryIds = const [],
+    this.showQuickAddNotification = true,
   });
 
   final List<Expense> expenses;
@@ -28,6 +29,7 @@ class ExpenseState {
   final int lastBudgetAlertLevel;
   final int budgetAlertPeriod;
   final List<String> pinnedQuickEntryIds;
+  final bool showQuickAddNotification;
 
   factory ExpenseState.decode(String source) {
     if (utf8.encode(source).length > 10 * 1024 * 1024) {
@@ -110,6 +112,7 @@ class ExpenseState {
           ? raw['budgetAlertPeriod'] as int
           : 0,
       pinnedQuickEntryIds: List.unmodifiable(pinned),
+      showQuickAddNotification: flag('showQuickAddNotification', true),
     );
   }
 
@@ -125,6 +128,7 @@ class ExpenseState {
     'lastBudgetAlertLevel': lastBudgetAlertLevel,
     'budgetAlertPeriod': budgetAlertPeriod,
     'pinnedQuickEntryIds': pinnedQuickEntryIds,
+    'showQuickAddNotification': showQuickAddNotification,
   };
 
   String encode() => jsonEncode(toMap());
@@ -140,6 +144,7 @@ class ExpenseState {
     int? lastBudgetAlertLevel,
     int? budgetAlertPeriod,
     List<String>? pinnedQuickEntryIds,
+    bool? showQuickAddNotification,
   }) => ExpenseState(
     expenses: expenses == null ? this.expenses : List.unmodifiable(expenses),
     recurring: recurring == null
@@ -155,5 +160,7 @@ class ExpenseState {
     pinnedQuickEntryIds: pinnedQuickEntryIds == null
         ? this.pinnedQuickEntryIds
         : List.unmodifiable(pinnedQuickEntryIds),
+    showQuickAddNotification:
+        showQuickAddNotification ?? this.showQuickAddNotification,
   );
 }

@@ -11,14 +11,15 @@ import 'widgets/app_lock_gate.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final launchPayload = await QuickAddNotifications.initialize();
+  final provider = ExpenseProvider(repository: SqliteExpenseRepository());
+  await provider.initialized;
+  final launchPayload = await QuickAddNotifications.initialize(
+    showQuickAdd: false,
+  );
+  await QuickAddNotifications.syncQuickAdd(provider.showQuickAddNotification);
   runApp(
     MultiProvider(
-      providers: [
-        ChangeNotifierProvider(
-          create: (_) => ExpenseProvider(repository: SqliteExpenseRepository()),
-        ),
-      ],
+      providers: [ChangeNotifierProvider.value(value: provider)],
       child: JudgyApp(openAddOnStart: launchPayload == 'add'),
     ),
   );

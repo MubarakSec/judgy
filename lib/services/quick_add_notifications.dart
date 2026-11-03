@@ -48,20 +48,31 @@ class QuickAddNotifications {
         },
       );
       _initialized = true;
-      if (showQuickAdd) {
-        final android = _plugin
-            .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin
-            >();
-        final allowed = await android?.requestNotificationsPermission();
-        if (allowed != false) await _quickAddChannel.invokeMethod('show');
-      }
+      if (showQuickAdd) await syncQuickAdd(true);
       final details = await _plugin.getNotificationAppLaunchDetails();
       return details?.didNotificationLaunchApp == true
           ? details?.notificationResponse?.payload
           : null;
     } catch (_) {
       return null;
+    }
+  }
+
+  static Future<bool> syncQuickAdd(bool enabled) async {
+    if (!Platform.isAndroid) return true;
+    try {
+      if (enabled) {
+        final android = _plugin
+            .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin
+            >();
+        final allowed = await android?.requestNotificationsPermission();
+        if (allowed == false) return false;
+      }
+      await _quickAddChannel.invokeMethod(enabled ? 'show' : 'hide');
+      return true;
+    } catch (_) {
+      return false;
     }
   }
 }
