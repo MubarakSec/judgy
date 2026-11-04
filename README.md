@@ -9,18 +9,22 @@ track a monthly spending budget, and view totals in USD or Yemeni riyals (YER).
   categories, and displayed amounts. Sort by date, amount, or name; date order
   groups entries by day. The period summary stays complete while filtering the list.
 - Filter by day, week, month, or a custom date range. Insights and recurring
-  templates are in the top-bar overflow menu.
+  templates are beside the transaction list.
 - Edit, duplicate, annotate, and undo deleted transactions. Each entry has its own
   currency; changing the display currency does not change saved amounts.
-- Use **Use again** shortcuts in the home screen or notification sheet. They
+- Use **Use again** shortcuts in the add sheet or notification sheet. They
   prefill the amount, currency, category, and name for review. Pin any transaction
   from its menu to keep it at the front of quick add.
 - A basic entry needs a name and amount. Date and note stay under **Date and note**;
   the keyboard's Done action saves a valid entry.
-- Mark an entry as **Spent** or **Received**. The home card shows both flows and
-  the net amount; income does not use the spending budget.
-- Set monthly category budgets in Settings. Insights shows the amount left or over
-  each limit; category limits count current-month spending and ignore income.
+- Mark an entry as **Spent** or **Received**. The compact home summary shows
+  both flows; income does not use the spending budget.
+- Open **Budget** from the top bar to see monthly progress and edit the limit.
+  Set monthly category limits in Settings.
+- Choose System, Light, or Dark in Settings. Edit spending and income category
+  names and symbols there, or add your own. Renaming updates existing records.
+- Insights shows the amount left or over each category limit; limits count
+  current-month spending and ignore income.
 - Insights compares spending and income across the last six calendar months. Tap
   a month for exact spent, received, and net totals; empty months stay visible.
 - Save recurring spending or income templates, edit them, and apply each once per
