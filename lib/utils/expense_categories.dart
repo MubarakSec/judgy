@@ -17,6 +17,25 @@ class ExpenseCategory {
   static List<String> get labels =>
       all.map((category) => category.label).toList();
 
+  static const icons = <String, IconData>{
+    'coffee': Icons.coffee_outlined,
+    'food': Icons.restaurant_outlined,
+    'shopping': Icons.shopping_bag_outlined,
+    'subscriptions': Icons.subscriptions_outlined,
+    'other': Icons.receipt_long_outlined,
+    'transport': Icons.directions_bus_outlined,
+    'home': Icons.home_outlined,
+    'health': Icons.health_and_safety_outlined,
+    'work': Icons.work_outline,
+    'gift': Icons.card_giftcard_outlined,
+    'income': Icons.south_west_rounded,
+    'education': Icons.school_outlined,
+    'travel': Icons.flight_outlined,
+  };
+
+  static IconData iconForKey(String key) =>
+      icons[key] ?? Icons.receipt_long_outlined;
+
   static IconData iconFor(String label) {
     for (final category in all) {
       if (category.label == label) return category.icon;
