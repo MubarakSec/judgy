@@ -5,6 +5,7 @@ import '../providers/expense_provider.dart';
 import '../theme/app_theme.dart';
 import '../utils/currency_formatter.dart';
 import '../widgets/app_sheet.dart';
+import 'category_budget_editor.dart';
 
 class BudgetSheet extends StatelessWidget {
   const BudgetSheet({super.key});
@@ -20,6 +21,49 @@ class BudgetSheet extends StatelessWidget {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(provider.errorMessage ?? 'Budget could not be saved.'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _editCategoryLimit(
+    BuildContext context,
+    ExpenseProvider provider, [
+    String? existing,
+  ]) async {
+    final categories = <String>{
+      ...provider.categoriesFor('expense').map((item) => item.label),
+      ...provider.categoryBudgetCents.keys,
+    }.toList()..sort();
+    final available = existing == null
+        ? categories
+              .where((name) => !provider.categoryBudgetCents.containsKey(name))
+              .toList()
+        : categories;
+    if (available.isEmpty) return;
+    final change = await showDialog<CategoryBudgetChange>(
+      context: context,
+      builder: (_) => CategoryBudgetEditor(
+        categories: available,
+        isUsd: provider.isUSD,
+        exchangeRate: provider.exchangeRate,
+        initialCategory: existing,
+        initialCents: existing == null
+            ? null
+            : provider.categoryBudgetCents[existing],
+      ),
+    );
+    if (change == null || !context.mounted) return;
+    final saved = await provider.setCategoryBudget(
+      change.category,
+      change.cents,
+    );
+    if (!saved && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            provider.errorMessage ?? 'Category limit could not be saved.',
+          ),
         ),
       );
     }
@@ -95,22 +139,48 @@ class BudgetSheet extends StatelessWidget {
             icon: const Icon(Icons.edit_outlined),
             label: Text(hasBudget ? 'Edit budget' : 'Set a budget'),
           ),
-          if (p.categoryBudgetCents.isNotEmpty) ...[
-            const SizedBox(height: AppSpacing.lg),
+          const SizedBox(height: AppSpacing.lg),
+          Text(
+            'Category limits',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          if (p.categoryBudgetCents.isEmpty)
             Text(
-              'Category limits',
-              style: Theme.of(context).textTheme.titleMedium,
+              'No category limits yet.',
+              style: Theme.of(context).textTheme.bodySmall,
             ),
+          if (p.categoryBudgetCents.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.sm),
             for (final entry in p.categoryBudgetCents.entries) ...[
-              Row(
-                children: [
-                  Expanded(child: Text(entry.key)),
-                  Text(
-                    '${money(p.categoryTotals[entry.key] ?? 0)} / ${money(entry.value)}',
-                    style: Theme.of(context).textTheme.bodySmall,
+              InkWell(
+                onTap: () => _editCategoryLimit(context, p, entry.key),
+                borderRadius: BorderRadius.circular(AppRadii.small),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              entry.key,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const Icon(Icons.edit_outlined, size: 18),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.xxs),
+                      Text(
+                        '${money(p.categoryTotals[entry.key] ?? 0)} spent of ${money(entry.value)}',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
               const SizedBox(height: AppSpacing.xs),
               ClipRRect(
@@ -128,6 +198,17 @@ class BudgetSheet extends StatelessWidget {
               const SizedBox(height: AppSpacing.md),
             ],
           ],
+          OutlinedButton.icon(
+            onPressed:
+                p.isSaving ||
+                    p.categoryBudgetCents.length >=
+                        p.categoriesFor('expense').length
+                ? null
+                : () => _editCategoryLimit(context, p),
+            icon: const Icon(Icons.add),
+            label: const Text('Add category limit'),
+          ),
+          const SizedBox(height: AppSpacing.lg),
         ],
       ),
     );

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'expense.dart';
 import 'ledger_category.dart';
 import 'recurring_expense.dart';
+import 'favorite_template.dart';
 
 /// The portable, versioned representation shared by storage and backups.
 class ExpenseState {
@@ -21,6 +22,7 @@ class ExpenseState {
     this.showQuickAddNotification = true,
     this.themeMode = 'system',
     this.categories = LedgerCategory.defaults,
+    this.favorites = const [],
   });
 
   final List<Expense> expenses;
@@ -37,6 +39,7 @@ class ExpenseState {
   final bool showQuickAddNotification;
   final String themeMode;
   final List<LedgerCategory> categories;
+  final List<FavoriteTemplate> favorites;
 
   factory ExpenseState.decode(String source) {
     if (utf8.encode(source).length > 10 * 1024 * 1024) {
@@ -104,6 +107,20 @@ class ExpenseState {
       }
       recurring.add(item);
     }
+    final favoriteRows = raw['favorites'] ?? const [];
+    if (favoriteRows is! List || favoriteRows.length > 12) {
+      throw const FormatException('Invalid favorites.');
+    }
+    final favorites = <FavoriteTemplate>[];
+    ids.clear();
+    for (final row in favoriteRows) {
+      if (row is! Map) throw const FormatException('Invalid favorite.');
+      final favorite = FavoriteTemplate.fromMap(Map<String, dynamic>.from(row));
+      if (!ids.add(favorite.id)) {
+        throw const FormatException('Duplicate favorite ID.');
+      }
+      favorites.add(favorite);
+    }
     final categoryRows = raw['categories'];
     if (categoryRows != null && categoryRows is! List) {
       throw const FormatException('Invalid categories.');
@@ -122,6 +139,7 @@ class ExpenseState {
       expenses: expenses,
       recurring: recurring,
       budgetCategories: categoryBudgets.keys,
+      favorites: favorites,
     );
     LedgerCategory.validateList(categories);
     final pinnedRaw = raw['pinnedQuickEntryIds'] ?? const [];
@@ -168,6 +186,7 @@ class ExpenseState {
       showQuickAddNotification: flag('showQuickAddNotification', true),
       themeMode: themeMode as String,
       categories: categories,
+      favorites: List.unmodifiable(favorites),
     );
   }
 
@@ -187,6 +206,7 @@ class ExpenseState {
     'showQuickAddNotification': showQuickAddNotification,
     'themeMode': themeMode,
     'categories': categories.map((e) => e.toMap()).toList(),
+    'favorites': favorites.map((e) => e.toMap()).toList(),
   };
 
   String encode() => jsonEncode(toMap());
@@ -206,6 +226,7 @@ class ExpenseState {
     bool? showQuickAddNotification,
     String? themeMode,
     List<LedgerCategory>? categories,
+    List<FavoriteTemplate>? favorites,
   }) => ExpenseState(
     expenses: expenses == null ? this.expenses : List.unmodifiable(expenses),
     recurring: recurring == null
@@ -230,5 +251,8 @@ class ExpenseState {
     categories: categories == null
         ? this.categories
         : List.unmodifiable(categories),
+    favorites: favorites == null
+        ? this.favorites
+        : List.unmodifiable(favorites),
   );
 }

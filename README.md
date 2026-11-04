@@ -12,18 +12,20 @@ track a monthly spending budget, and view totals in USD or Yemeni riyals (YER).
   templates are beside the transaction list.
 - Edit, duplicate, annotate, and undo deleted transactions. Each entry has its own
   currency; changing the display currency does not change saved amounts.
-- Use **Use again** shortcuts in the add sheet or notification sheet. They
-  prefill the amount, currency, category, and name for review. Pin any transaction
-  from its menu to keep it at the front of quick add.
+- Use **Quick picks** in the add sheet or notification sheet. Saved favorites
+  and recent entries prefill the amount, currency, category, and name. Create,
+  edit, and remove favorites without logging a transaction first. Pin a past
+  transaction from its menu to keep it among recent picks.
 - A basic entry needs a name and amount. Date and note stay under **Date and note**;
   the keyboard's Done action saves a valid entry.
 - Mark an entry as **Spent** or **Received**. The compact home summary shows
   both flows; income does not use the spending budget.
 - Open **Budget** from the top bar to see monthly progress and edit the limit.
-  Set monthly category limits in Settings.
+  Add, edit, and remove monthly category limits there.
 - Choose System, Light, or Dark in Settings. Edit spending and income category
   names and symbols there, or add your own. Renaming updates existing records.
-- Insights shows the amount left or over each category limit; limits count
+- Insights filters monthly totals by spent or received, then by category. It
+  shows the selected amount and transaction count. Category limits count
   current-month spending and ignore income.
 - Insights compares spending and income across the last six calendar months. Tap
   a month for exact spent, received, and net totals; empty months stay visible.

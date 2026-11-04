@@ -47,7 +47,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Use again'), findsOneWidget);
+    expect(find.text('Quick picks'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('quick-entry-coffee')));
     await tester.pumpAndSettle();
     expect(

@@ -5,7 +5,7 @@ import 'package:provider/provider.dart';
 import '../providers/expense_provider.dart';
 import '../theme/app_theme.dart';
 import '../utils/currency_formatter.dart';
-import '../utils/expense_categories.dart';
+import '../widgets/category_breakdown.dart';
 import '../widgets/app_sheet.dart';
 import '../widgets/cash_flow_history_chart.dart';
 
@@ -21,19 +21,6 @@ class InsightsSheet extends StatelessWidget {
       exchangeRate: provider.exchangeRate,
     );
 
-    final totals = provider.categoryTotals;
-    final sortedCategories =
-        {...totals.keys, ...provider.categoryBudgetCents.keys}
-            .map((category) => MapEntry(category, totals[category] ?? 0))
-            .toList()
-          ..sort((a, b) {
-            final bySpent = b.value.compareTo(a.value);
-            return bySpent == 0 ? a.key.compareTo(b.key) : bySpent;
-          });
-    final maxCategory = sortedCategories.isEmpty
-        ? 1
-        : sortedCategories.first.value;
-
     final change = provider.monthOverMonthChange;
     final changeLabel = change.isNaN
         ? '—'
@@ -47,6 +34,13 @@ class InsightsSheet extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          const CategoryBreakdown(),
+          const SizedBox(height: AppSpacing.lg),
+          Text(
+            'All transactions',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: AppSpacing.xs),
           _InsightRow(
             label: 'Spent this month',
             value: currency(provider.monthlySpentCents),
@@ -87,82 +81,6 @@ class InsightsSheet extends StatelessWidget {
             exchangeRate: provider.exchangeRate,
           ),
           const SizedBox(height: AppSpacing.lg),
-          Text(
-            'Top categories',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          if (sortedCategories.isEmpty)
-            Text(
-              'No expenses this month yet.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: AppPalette.of(context).textSecondary,
-              ),
-            )
-          else
-            ...sortedCategories.map((entry) {
-              final limit = provider.categoryBudgetCents[entry.key];
-              final over = limit != null && entry.value > limit;
-              final ratio = limit == null
-                  ? (maxCategory <= 0 ? 0.0 : entry.value / maxCategory)
-                  : (entry.value / limit).clamp(0.0, 1.0);
-              return Padding(
-                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(
-                          ExpenseCategory.iconForKey(
-                            provider
-                                    .findCategory(entry.key, 'expense')
-                                    ?.iconKey ??
-                                'other',
-                          ),
-                          size: 18,
-                          color: AppPalette.of(context).textSecondary,
-                        ),
-                        const SizedBox(width: AppSpacing.xs),
-                        Expanded(child: Text(entry.key)),
-                        Text(
-                          currency(entry.value),
-                          style: over
-                              ? TextStyle(color: AppPalette.of(context).danger)
-                              : null,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.xxs),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(AppRadii.small),
-                      child: LinearProgressIndicator(
-                        value: ratio,
-                        minHeight: 6,
-                        color: over
-                            ? AppPalette.of(context).danger
-                            : AppPalette.of(context).accent,
-                        backgroundColor: AppPalette.of(context).input,
-                      ),
-                    ),
-                    if (limit != null) ...[
-                      const SizedBox(height: AppSpacing.xxs),
-                      Text(
-                        over
-                            ? '${currency(entry.value - limit)} over ${currency(limit)} limit'
-                            : '${currency(limit - entry.value)} left of ${currency(limit)} limit',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: over
-                              ? AppPalette.of(context).danger
-                              : AppPalette.of(context).textSecondary,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              );
-            }),
-          const SizedBox(height: AppSpacing.lg),
           FilledButton.icon(
             onPressed: () {
               final provider = context.read<ExpenseProvider>();
@@ -186,7 +104,7 @@ class InsightsSheet extends StatelessWidget {
               buffer.writeln(
                 'Daily average: ${currency(provider.dailyAverageCents)}',
               );
-              buffer.writeln('Categories:');
+              buffer.writeln('Spent by category:');
               final categories =
                   {
                         ...provider.categoryTotals.keys,
@@ -205,6 +123,13 @@ class InsightsSheet extends StatelessWidget {
                 buffer.writeln(
                   '  ${entry.key}: ${currency(entry.value)}${limit == null ? '' : ' of ${currency(limit)} limit'}',
                 );
+              }
+              buffer.writeln('Received by category:');
+              final received =
+                  provider.monthlyCategoryTotals('income').entries.toList()
+                    ..sort((a, b) => b.value.compareTo(a.value));
+              for (final entry in received) {
+                buffer.writeln('  ${entry.key}: ${currency(entry.value)}');
               }
               Clipboard.setData(ClipboardData(text: buffer.toString()));
               ScaffoldMessenger.of(context).showSnackBar(

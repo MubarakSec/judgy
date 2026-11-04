@@ -1,6 +1,12 @@
 class CurrencyFormatter {
   const CurrencyFormatter._();
 
+  static String amountInputFromMinorUnits(int minorUnits) {
+    final whole = minorUnits ~/ 100;
+    final fraction = (minorUnits % 100).toString().padLeft(2, '0');
+    return '$whole.$fraction';
+  }
+
   static String normalizeDigits(String value) => _normalizeDigits(value);
 
   static String usdFromCents(int cents, {bool includeSign = true}) {
