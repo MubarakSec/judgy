@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import '../models/expense.dart';
 import '../models/cash_flow_history.dart';
 import '../models/expense_state.dart';
+import '../models/ledger_category.dart';
 import '../models/recurring_expense.dart';
 import '../repositories/expense_repository.dart';
 import '../services/quick_add_notifications.dart';
@@ -113,6 +114,13 @@ class ExpenseProvider with ChangeNotifier {
   bool get autoApplyRecurring => _state.autoApplyRecurring;
   bool get requireBiometric => _state.requireBiometric;
   bool get showQuickAddNotification => _state.showQuickAddNotification;
+  String get themeMode => _state.themeMode;
+  List<LedgerCategory> categoriesFor(String type) => List.unmodifiable(
+    _state.categories.where((category) => category.type == type),
+  );
+  LedgerCategory? findCategory(String label, String type) => _state.categories
+      .where((e) => e.label == label && e.type == type)
+      .firstOrNull;
   DateTime get now => _clock();
   bool get isUSD => _state.isUSD;
   double get exchangeRate => _state.exchangeRate;
@@ -267,6 +275,20 @@ class ExpenseProvider with ChangeNotifier {
   }
 
   Future<bool> toggleCurrency() => _mutate((s) => s.copyWith(isUSD: !s.isUSD));
+  Future<bool> setMonthlyBudget(double budget) => _mutate((s) {
+    if (!budget.isFinite || budget < 0 || budget > 9007199254740991 / 100) {
+      throw const FormatException('Enter a valid monthly budget.');
+    }
+    return s.copyWith(budgetCents: (budget * 100).round());
+  });
+
+  Future<bool> setExchangeRate(double rate) => _mutate((s) {
+    if (!rate.isFinite || rate <= 0 || rate > 1000000) {
+      throw const FormatException('Enter a rate above zero, up to 1,000,000.');
+    }
+    return s.copyWith(exchangeRate: rate);
+  });
+
   Future<bool> updateSettings(double rate, double budget) {
     if (!rate.isFinite ||
         rate <= 0 ||
@@ -308,6 +330,101 @@ class ExpenseProvider with ChangeNotifier {
       _mutate((s) => s.copyWith(requireBiometric: value));
   Future<bool> setShowQuickAddNotification(bool value) =>
       _mutate((s) => s.copyWith(showQuickAddNotification: value));
+  Future<bool> setThemeMode(String mode) => _mutate((s) {
+    if (!{'system', 'light', 'dark'}.contains(mode)) {
+      throw const FormatException('Choose System, Light, or Dark.');
+    }
+    return s.copyWith(themeMode: mode);
+  });
+
+  Future<bool> addCategory(LedgerCategory category) => _mutate((s) {
+    category.validate();
+    if (s.categories.any(
+      (e) =>
+          e.type == category.type &&
+          e.label.toLowerCase() == category.label.toLowerCase(),
+    )) {
+      throw const FormatException('A category with this name already exists.');
+    }
+    final categories = [...s.categories, category];
+    LedgerCategory.validateList(categories);
+    return s.copyWith(categories: categories);
+  });
+
+  Future<bool> updateCategory({
+    required String oldLabel,
+    required LedgerCategory replacement,
+  }) => _mutate((s) {
+    replacement.validate();
+    final old = s.categories
+        .where((e) => e.label == oldLabel && e.type == replacement.type)
+        .firstOrNull;
+    if (old == null) throw const FormatException('Category no longer exists.');
+    if (s.categories.any(
+      (e) =>
+          e.type == replacement.type &&
+          e.label != oldLabel &&
+          e.label.toLowerCase() == replacement.label.toLowerCase(),
+    )) {
+      throw const FormatException('A category with this name already exists.');
+    }
+    final categories = s.categories
+        .map((e) => identical(e, old) ? replacement : e)
+        .toList();
+    LedgerCategory.validateList(categories);
+    final renamed = replacement.label != oldLabel;
+    final expenses = renamed
+        ? s.expenses.map((entry) {
+            if (entry.type != replacement.type || entry.category != oldLabel) {
+              return entry;
+            }
+            return Expense.fromMap({
+              ...entry.toMap(),
+              'category': replacement.label,
+            });
+          }).toList()
+        : s.expenses;
+    final recurring = renamed
+        ? s.recurring.map((entry) {
+            if (entry.type != replacement.type || entry.category != oldLabel) {
+              return entry;
+            }
+            return RecurringExpense.fromMap({
+              ...entry.toMap(),
+              'category': replacement.label,
+            });
+          }).toList()
+        : s.recurring;
+    final budgets = {...s.categoryBudgetCents};
+    if (renamed && replacement.type == 'expense') {
+      final cents = budgets.remove(oldLabel);
+      if (cents != null) budgets[replacement.label] = cents;
+    }
+    return s.copyWith(
+      categories: categories,
+      expenses: expenses,
+      recurring: recurring,
+      categoryBudgetCents: budgets,
+    );
+  });
+
+  Future<bool> removeCategory(String label, String type) => _mutate((s) {
+    if (!s.categories.any((e) => e.label == label && e.type == type)) {
+      throw const FormatException('Category no longer exists.');
+    }
+    if (s.expenses.any((e) => e.type == type && e.category == label) ||
+        s.recurring.any((e) => e.type == type && e.category == label) ||
+        (type == 'expense' && s.categoryBudgetCents.containsKey(label))) {
+      throw const FormatException(
+        'This category is in use. Rename it to update existing entries.',
+      );
+    }
+    final categories = s.categories
+        .where((e) => e.type != type || e.label != label)
+        .toList();
+    LedgerCategory.validateList(categories);
+    return s.copyWith(categories: categories);
+  });
   Future<bool> setAutoApplyRecurring(bool value) => _mutate((s) {
     final updated = s.copyWith(autoApplyRecurring: value);
     return value ? _dueRecurring(updated) : updated;
@@ -481,21 +598,34 @@ class ExpenseProvider with ChangeNotifier {
     (s) => previewBackup(source).copyWith(
       requireBiometric: s.requireBiometric,
       showQuickAddNotification: s.showQuickAddNotification,
+      themeMode: s.themeMode,
     ),
     recovery: true,
     allowRecovery: true,
   );
   Future<bool> importCsv(String source) => _mutate(
-    (s) => s.copyWith(
-      expenses: _sorted(previewCsv(source)),
-      pinnedQuickEntryIds: const [],
-    ),
+    (s) {
+      final expenses = _sorted(previewCsv(source));
+      return s.copyWith(
+        expenses: expenses,
+        categories: LedgerCategory.includeUsed(
+          categories: s.categories,
+          expenses: expenses,
+          recurring: s.recurring,
+          budgetCategories: s.categoryBudgetCents.keys,
+        ),
+        pinnedQuickEntryIds: const [],
+      );
+    },
     recovery: true,
     allowRecovery: true,
   );
   Future<String?> recoveryBackup() => _repository.readRecovery();
   Future<bool> resetStorage() => _mutate(
-    (s) => ExpenseState(showQuickAddNotification: s.showQuickAddNotification),
+    (s) => ExpenseState(
+      showQuickAddNotification: s.showQuickAddNotification,
+      themeMode: s.themeMode,
+    ),
     allowRecovery: true,
     reset: true,
   );
@@ -552,6 +682,15 @@ class ExpenseProvider with ChangeNotifier {
           completer.complete(true);
           return;
         }
+        next = next.copyWith(
+          categories: LedgerCategory.includeUsed(
+            categories: next.categories,
+            expenses: next.expenses,
+            recurring: next.recurring,
+            budgetCategories: next.categoryBudgetCents.keys,
+          ),
+        );
+        LedgerCategory.validateList(next.categories);
         // Alert delivery is independent of persistence; its deduplication marker
         // is saved with the expense so a platform error cannot invite retries.
         final period = now.year * 100 + now.month;
@@ -634,6 +773,12 @@ class ExpenseProvider with ChangeNotifier {
         final budget = legacy['monthlyBudget'];
         _state = ExpenseState(
           expenses: _sorted(expenses),
+          categories: LedgerCategory.includeUsed(
+            categories: LedgerCategory.defaults,
+            expenses: expenses,
+            recurring: const [],
+            budgetCategories: const [],
+          ),
           isUSD: legacy['isUSD'] is bool ? legacy['isUSD'] as bool : true,
           exchangeRate:
               rate is num && rate.isFinite && rate > 0 && rate <= 1000000

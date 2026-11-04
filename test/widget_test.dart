@@ -34,7 +34,7 @@ void main() {
     await pumpApp(tester);
 
     expect(find.text('Judgy'), findsOneWidget);
-    expect(find.text('Spent this month'), findsOneWidget);
+    expect(find.text('THIS MONTH'), findsOneWidget);
     expect(find.text('Ready when you are'), findsOneWidget);
     expect(find.text('Add transaction'), findsOneWidget);
 
@@ -136,6 +136,56 @@ void main() {
   });
 
   testWidgets(
+    'settings switch theme and add a category used by the entry form',
+    (tester) async {
+      final provider = await pumpApp(tester);
+      await tester.tap(find.byTooltip('Settings'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Light'));
+      await tester.pumpAndSettle();
+      expect(provider.themeMode, 'light');
+      await tester.tap(find.text('Categories').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Add spending category'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Name'),
+        'Travel',
+      );
+      await tester.tap(find.text('Save').last);
+      await tester.pumpAndSettle();
+      expect(
+        provider.categoriesFor('expense').any((e) => e.label == 'Travel'),
+        isTrue,
+      );
+      await tester.tap(find.byTooltip('Close categories'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Close settings'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Add transaction'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(DropdownButtonFormField<String>));
+      await tester.pumpAndSettle();
+      expect(find.text('Travel'), findsWidgets);
+    },
+  );
+
+  testWidgets('budget opens separately from the home summary', (tester) async {
+    final provider = await pumpApp(tester);
+    expect(find.text('Monthly budget'), findsNothing);
+    await tester.tap(find.byTooltip('Budget'));
+    await tester.pumpAndSettle();
+    expect(find.text('Budget'), findsOneWidget);
+    expect(find.text('Edit budget'), findsOneWidget);
+    await tester.tap(find.text('Edit budget'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextFormField, 'Limit'), '600');
+    await tester.tap(find.text('Save').last);
+    await tester.pumpAndSettle();
+    expect(provider.monthlyBudgetCents, 60000);
+  });
+
+  testWidgets(
     'keyboard Done saves a basic transaction without opening details',
     (tester) async {
       final provider = await pumpApp(tester);
@@ -176,9 +226,11 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('quick-entry-old-coffee')), findsNothing);
+    await tester.tap(find.text('Add transaction'));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('quick-entry-old-coffee')));
     await tester.pumpAndSettle();
-    expect(find.text('Add again'), findsWidgets);
     expect(
       find.widgetWithText(TextFormField, 'What you bought'),
       findsOneWidget,
@@ -209,7 +261,12 @@ void main() {
     await tester.tap(find.text('Pin to quick add'));
     await tester.pumpAndSettle();
     expect(provider.isQuickEntryPinned('bus'), isTrue);
+    await tester.tap(find.text('Add transaction'));
+    await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('quick-entry-bus')), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Close transaction form'));
+    await tester.pumpAndSettle();
 
     await tester.tap(find.byTooltip('More actions for Bus'));
     await tester.pumpAndSettle();

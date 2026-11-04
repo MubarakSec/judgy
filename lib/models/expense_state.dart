@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'expense.dart';
+import 'ledger_category.dart';
 import 'recurring_expense.dart';
 
 /// The portable, versioned representation shared by storage and backups.
@@ -18,6 +19,8 @@ class ExpenseState {
     this.budgetAlertPeriod = 0,
     this.pinnedQuickEntryIds = const [],
     this.showQuickAddNotification = true,
+    this.themeMode = 'system',
+    this.categories = LedgerCategory.defaults,
   });
 
   final List<Expense> expenses;
@@ -32,6 +35,8 @@ class ExpenseState {
   final int budgetAlertPeriod;
   final List<String> pinnedQuickEntryIds;
   final bool showQuickAddNotification;
+  final String themeMode;
+  final List<LedgerCategory> categories;
 
   factory ExpenseState.decode(String source) {
     if (utf8.encode(source).length > 10 * 1024 * 1024) {
@@ -99,6 +104,26 @@ class ExpenseState {
       }
       recurring.add(item);
     }
+    final categoryRows = raw['categories'];
+    if (categoryRows != null && categoryRows is! List) {
+      throw const FormatException('Invalid categories.');
+    }
+    final parsedCategories = categoryRows == null
+        ? LedgerCategory.defaults
+        : [
+            for (final row in categoryRows)
+              if (row is Map)
+                LedgerCategory.fromMap(Map<String, dynamic>.from(row))
+              else
+                throw const FormatException('Invalid category row.'),
+          ];
+    final categories = LedgerCategory.includeUsed(
+      categories: parsedCategories,
+      expenses: expenses,
+      recurring: recurring,
+      budgetCategories: categoryBudgets.keys,
+    );
+    LedgerCategory.validateList(categories);
     final pinnedRaw = raw['pinnedQuickEntryIds'] ?? const [];
     if (pinnedRaw is! List || pinnedRaw.length > 5) {
       throw const FormatException('Invalid quick entry pins.');
@@ -119,6 +144,11 @@ class ExpenseState {
       return raw[key] as bool;
     }
 
+    final themeMode = raw['themeMode'] ?? 'dark';
+    if (themeMode != 'system' && themeMode != 'light' && themeMode != 'dark') {
+      throw const FormatException('Invalid theme setting.');
+    }
+
     return ExpenseState(
       expenses: List.unmodifiable(expenses),
       recurring: List.unmodifiable(recurring),
@@ -136,6 +166,8 @@ class ExpenseState {
           : 0,
       pinnedQuickEntryIds: List.unmodifiable(pinned),
       showQuickAddNotification: flag('showQuickAddNotification', true),
+      themeMode: themeMode as String,
+      categories: categories,
     );
   }
 
@@ -153,6 +185,8 @@ class ExpenseState {
     'budgetAlertPeriod': budgetAlertPeriod,
     'pinnedQuickEntryIds': pinnedQuickEntryIds,
     'showQuickAddNotification': showQuickAddNotification,
+    'themeMode': themeMode,
+    'categories': categories.map((e) => e.toMap()).toList(),
   };
 
   String encode() => jsonEncode(toMap());
@@ -170,6 +204,8 @@ class ExpenseState {
     int? budgetAlertPeriod,
     List<String>? pinnedQuickEntryIds,
     bool? showQuickAddNotification,
+    String? themeMode,
+    List<LedgerCategory>? categories,
   }) => ExpenseState(
     expenses: expenses == null ? this.expenses : List.unmodifiable(expenses),
     recurring: recurring == null
@@ -190,5 +226,9 @@ class ExpenseState {
         : List.unmodifiable(pinnedQuickEntryIds),
     showQuickAddNotification:
         showQuickAddNotification ?? this.showQuickAddNotification,
+    themeMode: themeMode ?? this.themeMode,
+    categories: categories == null
+        ? this.categories
+        : List.unmodifiable(categories),
   );
 }

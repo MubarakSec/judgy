@@ -47,8 +47,8 @@ class QuickEntryStrip extends StatelessWidget {
                     '${pinned ? 'Pinned, ' : ''}${entry.isIncome ? 'Received' : 'Spent'}, ${entry.title}, $amount',
                 child: Material(
                   color: selected
-                      ? AppColors.accentSoft
-                      : AppColors.surfaceElevated,
+                      ? AppPalette.of(context).accentSoft
+                      : AppPalette.of(context).surfaceElevated,
                   borderRadius: BorderRadius.circular(AppRadii.medium),
                   child: InkWell(
                     key: ValueKey('quick-entry-${entry.id}'),
@@ -62,7 +62,9 @@ class QuickEntryStrip extends StatelessWidget {
                       ),
                       decoration: BoxDecoration(
                         border: Border.all(
-                          color: selected ? AppColors.accent : AppColors.border,
+                          color: selected
+                              ? AppPalette.of(context).accent
+                              : AppPalette.of(context).border,
                         ),
                         borderRadius: BorderRadius.circular(AppRadii.medium),
                       ),
@@ -83,10 +85,10 @@ class QuickEntryStrip extends StatelessWidget {
                                 ),
                               ),
                               if (pinned)
-                                const Icon(
+                                Icon(
                                   Icons.push_pin_rounded,
                                   size: 15,
-                                  color: AppColors.accent,
+                                  color: AppPalette.of(context).accent,
                                 ),
                             ],
                           ),

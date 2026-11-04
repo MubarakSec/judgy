@@ -54,7 +54,7 @@ class InsightsSheet extends StatelessWidget {
           _InsightRow(
             label: 'Received this month',
             value: currency(provider.monthlyIncomeCents),
-            valueColor: AppColors.success,
+            valueColor: AppPalette.of(context).success,
           ),
           _InsightRow(
             label: 'Net this month',
@@ -68,7 +68,9 @@ class InsightsSheet extends StatelessWidget {
           _InsightRow(
             label: 'Vs. same period last month',
             value: changeLabel,
-            valueColor: change > 0 ? AppColors.danger : AppColors.success,
+            valueColor: change > 0
+                ? AppPalette.of(context).danger
+                : AppPalette.of(context).success,
           ),
           _InsightRow(
             label: 'Daily average',
@@ -93,9 +95,9 @@ class InsightsSheet extends StatelessWidget {
           if (sortedCategories.isEmpty)
             Text(
               'No expenses this month yet.',
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: AppPalette.of(context).textSecondary,
+              ),
             )
           else
             ...sortedCategories.map((entry) {
@@ -112,16 +114,21 @@ class InsightsSheet extends StatelessWidget {
                     Row(
                       children: [
                         Icon(
-                          ExpenseCategory.iconFor(entry.key),
+                          ExpenseCategory.iconForKey(
+                            provider
+                                    .findCategory(entry.key, 'expense')
+                                    ?.iconKey ??
+                                'other',
+                          ),
                           size: 18,
-                          color: AppColors.textSecondary,
+                          color: AppPalette.of(context).textSecondary,
                         ),
                         const SizedBox(width: AppSpacing.xs),
                         Expanded(child: Text(entry.key)),
                         Text(
                           currency(entry.value),
                           style: over
-                              ? const TextStyle(color: AppColors.danger)
+                              ? TextStyle(color: AppPalette.of(context).danger)
                               : null,
                         ),
                       ],
@@ -132,8 +139,10 @@ class InsightsSheet extends StatelessWidget {
                       child: LinearProgressIndicator(
                         value: ratio,
                         minHeight: 6,
-                        color: over ? AppColors.danger : AppColors.accent,
-                        backgroundColor: AppColors.input,
+                        color: over
+                            ? AppPalette.of(context).danger
+                            : AppPalette.of(context).accent,
+                        backgroundColor: AppPalette.of(context).input,
                       ),
                     ),
                     if (limit != null) ...[
@@ -144,8 +153,8 @@ class InsightsSheet extends StatelessWidget {
                             : '${currency(limit - entry.value)} left of ${currency(limit)} limit',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: over
-                              ? AppColors.danger
-                              : AppColors.textSecondary,
+                              ? AppPalette.of(context).danger
+                              : AppPalette.of(context).textSecondary,
                         ),
                       ),
                     ],
@@ -232,15 +241,15 @@ class _InsightRow extends StatelessWidget {
           Expanded(
             child: Text(
               label,
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: AppPalette.of(context).textSecondary,
+              ),
             ),
           ),
           Text(
             value,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: valueColor ?? AppColors.textPrimary,
+              color: valueColor ?? AppPalette.of(context).textPrimary,
             ),
           ),
         ],

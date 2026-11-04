@@ -16,7 +16,11 @@ class ExpenseTile extends StatelessWidget {
 
   final Expense expense;
 
-  IconData _categoryIcon(String category) => ExpenseCategory.iconFor(category);
+  IconData _categoryIcon(ExpenseProvider provider) =>
+      ExpenseCategory.iconForKey(
+        provider.findCategory(expense.category, expense.type)?.iconKey ??
+            'other',
+      );
 
   Future<void> _delete(BuildContext context, ExpenseProvider provider) async {
     final messenger = ScaffoldMessenger.of(context);
@@ -146,19 +150,19 @@ class ExpenseTile extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: AppSpacing.sm),
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
         decoration: BoxDecoration(
-          color: AppColors.danger,
+          color: AppPalette.of(context).danger,
           borderRadius: BorderRadius.circular(AppRadii.medium),
         ),
         alignment: Alignment.centerRight,
-        child: const Row(
+        child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.delete_outline, color: AppColors.onDanger),
-            SizedBox(width: AppSpacing.xs),
+            Icon(Icons.delete_outline, color: AppPalette.of(context).onDanger),
+            const SizedBox(width: AppSpacing.xs),
             Text(
               'Delete',
               style: TextStyle(
-                color: AppColors.onDanger,
+                color: AppPalette.of(context).onDanger,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -180,7 +184,7 @@ class ExpenseTile extends StatelessWidget {
             AppSpacing.sm,
           ),
           decoration: BoxDecoration(
-            color: AppColors.surface,
+            color: AppPalette.of(context).surface,
             borderRadius: BorderRadius.circular(AppRadii.medium),
           ),
           child: Row(
@@ -189,18 +193,18 @@ class ExpenseTile extends StatelessWidget {
                 child: Container(
                   width: 42,
                   height: 42,
-                  decoration: const BoxDecoration(
-                    color: AppColors.input,
+                  decoration: BoxDecoration(
+                    color: AppPalette.of(context).input,
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
                     expense.isIncome
                         ? Icons.arrow_downward_rounded
-                        : _categoryIcon(expense.category),
+                        : _categoryIcon(provider),
                     size: 21,
                     color: expense.isIncome
-                        ? AppColors.success
-                        : AppColors.textPrimary,
+                        ? AppPalette.of(context).success
+                        : AppPalette.of(context).textPrimary,
                   ),
                 ),
               ),
@@ -252,7 +256,7 @@ class ExpenseTile extends StatelessWidget {
                           style: Theme.of(context).textTheme.titleMedium
                               ?.copyWith(
                                 color: expense.isIncome
-                                    ? AppColors.success
+                                    ? AppPalette.of(context).success
                                     : null,
                               ),
                         ),
@@ -323,11 +327,14 @@ class ExpenseTile extends StatelessWidget {
                       ],
                     ),
                   ),
-                  const PopupMenuItem(
+                  PopupMenuItem(
                     value: _ExpenseAction.delete,
                     child: Row(
                       children: [
-                        Icon(Icons.delete_outline, color: AppColors.danger),
+                        Icon(
+                          Icons.delete_outline,
+                          color: AppPalette.of(context).danger,
+                        ),
                         SizedBox(width: AppSpacing.sm),
                         Text('Delete'),
                       ],

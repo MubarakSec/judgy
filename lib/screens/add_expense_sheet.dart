@@ -7,7 +7,6 @@ import '../models/expense.dart';
 import '../providers/expense_provider.dart';
 import '../theme/app_theme.dart';
 import '../utils/currency_formatter.dart';
-import '../utils/expense_categories.dart';
 import '../widgets/app_sheet.dart';
 import '../widgets/quick_entry_strip.dart';
 
@@ -28,6 +27,16 @@ class AddExpenseSheet extends StatefulWidget {
 }
 
 class _AddExpenseSheetState extends State<AddExpenseSheet> {
+  String _defaultCategory(ExpenseProvider provider, String type) {
+    final categories = provider.categoriesFor(type);
+    final preferred = type == 'income' ? 'Income' : 'Other';
+    return categories
+            .where((category) => category.label == preferred)
+            .firstOrNull
+            ?.label ??
+        categories.first.label;
+  }
+
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _amountController = TextEditingController();
@@ -49,6 +58,7 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
     final expense = widget.expense ?? widget.suggestion;
     _showDetails = widget.expense != null;
     final provider = context.read<ExpenseProvider>();
+    _selectedCategory = _defaultCategory(provider, 'expense');
     _selectedDate = widget.duplicate || widget.suggestion != null
         ? provider.now
         : expense?.date ?? provider.now;
@@ -210,9 +220,9 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
               liveRegion: true,
               child: Text(
                 _submitError!,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyMedium?.copyWith(color: AppColors.danger),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppPalette.of(context).danger,
+                ),
               ),
             ),
             const SizedBox(height: AppSpacing.xs),
@@ -267,9 +277,7 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
                   ? null
                   : (selection) => setState(() {
                       _type = selection.first;
-                      _selectedCategory = _type == 'income'
-                          ? 'Income'
-                          : 'Other';
+                      _selectedCategory = _defaultCategory(provider, _type);
                     }),
             ),
             const SizedBox(height: AppSpacing.md),
@@ -336,13 +344,13 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
               key: ValueKey(_selectedCategory),
               initialValue: _selectedCategory,
               isExpanded: true,
-              dropdownColor: AppColors.surfaceElevated,
+              dropdownColor: AppPalette.of(context).surfaceElevated,
               decoration: const InputDecoration(labelText: 'Category'),
               items:
                   {
-                        ...(_type == 'income'
-                            ? ['Income', 'Salary', 'Gift', 'Refund', 'Other']
-                            : ExpenseCategory.labels),
+                        ...provider
+                            .categoriesFor(_type)
+                            .map((category) => category.label),
                         _selectedCategory,
                       }
                       .map(

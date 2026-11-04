@@ -29,7 +29,7 @@ class AppSheet extends StatelessWidget {
       child: Align(
         alignment: Alignment.bottomCenter,
         child: Material(
-          color: AppColors.surface,
+          color: AppPalette.of(context).surface,
           clipBehavior: Clip.antiAlias,
           borderRadius: const BorderRadius.vertical(
             top: Radius.circular(AppRadii.sheet),
@@ -62,7 +62,7 @@ class AppSheet extends StatelessWidget {
                               width: 36,
                               height: 4,
                               decoration: BoxDecoration(
-                                color: AppColors.border,
+                                color: AppPalette.of(context).border,
                                 borderRadius: BorderRadius.circular(99),
                               ),
                             ),
@@ -89,7 +89,9 @@ class AppSheet extends StatelessWidget {
                                             .textTheme
                                             .bodyLarge
                                             ?.copyWith(
-                                              color: AppColors.textSecondary,
+                                              color: AppPalette.of(
+                                                context,
+                                              ).textSecondary,
                                             ),
                                       ),
                                     ],

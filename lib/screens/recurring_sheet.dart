@@ -7,7 +7,6 @@ import '../models/expense.dart';
 import '../providers/expense_provider.dart';
 import '../theme/app_theme.dart';
 import '../utils/currency_formatter.dart';
-import '../utils/expense_categories.dart';
 import '../widgets/app_sheet.dart';
 
 class RecurringSheet extends StatefulWidget {
@@ -75,9 +74,9 @@ class _RecurringSheetState extends State<RecurringSheet> {
           if (provider.recurringExpenses.isEmpty)
             Text(
               'No recurring transactions yet.',
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: AppPalette.of(context).textSecondary,
+              ),
             )
           else
             ...provider.recurringExpenses.map((item) {
@@ -94,9 +93,9 @@ class _RecurringSheetState extends State<RecurringSheet> {
                 margin: const EdgeInsets.only(bottom: AppSpacing.sm),
                 padding: const EdgeInsets.all(AppSpacing.md),
                 decoration: BoxDecoration(
-                  color: AppColors.surfaceElevated,
+                  color: AppPalette.of(context).surfaceElevated,
                   borderRadius: BorderRadius.circular(AppRadii.medium),
-                  border: Border.all(color: AppColors.border),
+                  border: Border.all(color: AppPalette.of(context).border),
                 ),
                 child: Row(
                   children: [
@@ -195,6 +194,11 @@ class _RecurringEditorState extends State<_RecurringEditor> {
   @override
   void initState() {
     super.initState();
+    _category = context
+        .read<ExpenseProvider>()
+        .categoriesFor('expense')
+        .first
+        .label;
     final initial = widget.initial;
     if (initial == null) return;
     _title.text = initial.title;
@@ -233,139 +237,137 @@ class _RecurringEditorState extends State<_RecurringEditor> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: Text(
-      widget.initial == null
-          ? 'Add recurring transaction'
-          : 'Edit recurring transaction',
-    ),
-    content: SingleChildScrollView(
-      child: Form(
-        key: _form,
-        autovalidateMode: AutovalidateMode.onUserInteraction,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SegmentedButton<String>(
-              segments: const [
-                ButtonSegment(value: 'expense', label: Text('Spent')),
-                ButtonSegment(value: 'income', label: Text('Received')),
-              ],
-              selected: {_type},
-              onSelectionChanged: (selection) => setState(() {
-                _type = selection.first;
-                _category = _type == 'income' ? 'Income' : 'Other';
-              }),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            TextFormField(
-              controller: _title,
-              decoration: InputDecoration(
-                labelText: _type == 'income' ? 'Source' : 'Title',
+  Widget build(BuildContext context) {
+    final categories = context.watch<ExpenseProvider>().categoriesFor(_type);
+    return AlertDialog(
+      title: Text(
+        widget.initial == null
+            ? 'Add recurring transaction'
+            : 'Edit recurring transaction',
+      ),
+      content: SingleChildScrollView(
+        child: Form(
+          key: _form,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(value: 'expense', label: Text('Spent')),
+                  ButtonSegment(value: 'income', label: Text('Received')),
+                ],
+                selected: {_type},
+                onSelectionChanged: (selection) => setState(() {
+                  _type = selection.first;
+                  _category = context
+                      .read<ExpenseProvider>()
+                      .categoriesFor(_type)
+                      .first
+                      .label;
+                }),
               ),
-              maxLength: 80,
-              validator: (value) => value == null || value.trim().isEmpty
-                  ? 'Enter a transaction name.'
-                  : null,
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            TextFormField(
-              controller: _amount,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
+              const SizedBox(height: AppSpacing.sm),
+              TextFormField(
+                controller: _title,
+                decoration: InputDecoration(
+                  labelText: _type == 'income' ? 'Source' : 'Title',
+                ),
+                maxLength: 80,
+                validator: (value) => value == null || value.trim().isEmpty
+                    ? 'Enter a transaction name.'
+                    : null,
               ),
-              decoration: InputDecoration(
-                labelText: 'Amount',
-                suffixText: widget.isUSD ? 'USD' : 'YER',
-              ),
-              validator: (value) {
-                final amount = CurrencyFormatter.parseAmount(value ?? '');
-                if (amount == null || amount <= 0) {
-                  return 'Enter a positive amount.';
-                }
-                if (widget.initial != null && value == _initialAmountText) {
+              const SizedBox(height: AppSpacing.sm),
+              TextFormField(
+                controller: _amount,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: InputDecoration(
+                  labelText: 'Amount',
+                  suffixText: widget.isUSD ? 'USD' : 'YER',
+                ),
+                validator: (value) {
+                  final amount = CurrencyFormatter.parseAmount(value ?? '');
+                  if (amount == null || amount <= 0) {
+                    return 'Enter a positive amount.';
+                  }
+                  if (widget.initial != null && value == _initialAmountText) {
+                    return null;
+                  }
+                  try {
+                    Expense.fromEnteredAmount(
+                      id: 'validate',
+                      title: 'Amount',
+                      enteredAmount: amount,
+                      currency: widget.isUSD ? 'USD' : 'YER',
+                      exchangeRate: widget.rate,
+                      date: DateTime.now(),
+                      category: _category,
+                    );
+                  } catch (_) {
+                    return 'Amount must convert to at least 0.01 USD and fit safely.';
+                  }
                   return null;
-                }
-                try {
-                  Expense.fromEnteredAmount(
-                    id: 'validate',
-                    title: 'Amount',
-                    enteredAmount: amount,
-                    currency: widget.isUSD ? 'USD' : 'YER',
-                    exchangeRate: widget.rate,
-                    date: DateTime.now(),
-                    category: _category,
-                  );
-                } catch (_) {
-                  return 'Amount must convert to at least 0.01 USD and fit safely.';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            DropdownButtonFormField<String>(
-              key: ValueKey('recurring-category-$_type-$_category'),
-              initialValue: _category,
-              decoration: const InputDecoration(labelText: 'Category'),
-              items:
-                  (_type == 'income'
-                          ? {
-                              'Income',
-                              'Salary',
-                              'Gift',
-                              'Refund',
-                              'Other',
-                              _category,
-                            }
-                          : {...ExpenseCategory.labels, _category})
-                      .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-                      .toList(),
-              onChanged: (value) {
-                if (value != null) _category = value;
-              },
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            TextFormField(
-              controller: _day,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Day of month',
-                helperText: 'Days 29–31 use month end in shorter months.',
+                },
               ),
-              validator: (value) {
-                final day = int.tryParse(value ?? '');
-                return day == null || day < 1 || day > 31
-                    ? 'Choose a day from 1 to 31.'
-                    : null;
-              },
-            ),
-          ],
+              const SizedBox(height: AppSpacing.sm),
+              DropdownButtonFormField<String>(
+                key: ValueKey('recurring-category-$_type-$_category'),
+                initialValue: _category,
+                decoration: const InputDecoration(labelText: 'Category'),
+                items:
+                    {...categories.map((category) => category.label), _category}
+                        .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                        .toList(),
+                onChanged: (value) {
+                  if (value != null) _category = value;
+                },
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              TextFormField(
+                controller: _day,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Day of month',
+                  helperText: 'Days 29–31 use month end in shorter months.',
+                ),
+                validator: (value) {
+                  final day = int.tryParse(value ?? '');
+                  return day == null || day < 1 || day > 31
+                      ? 'Choose a day from 1 to 31.'
+                      : null;
+                },
+              ),
+            ],
+          ),
         ),
       ),
-    ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.pop(context),
-        child: const Text('Cancel'),
-      ),
-      FilledButton(
-        onPressed: () {
-          if (!_form.currentState!.validate()) return;
-          Navigator.pop(
-            context,
-            RecurringExpense(
-              id: widget.initial?.id ?? const Uuid().v4(),
-              title: _title.text.trim(),
-              amountCents: _amountCents(),
-              category: _category,
-              dayOfMonth: int.parse(_day.text),
-              type: _type,
-              lastApplied: widget.initial?.lastApplied,
-            ),
-          );
-        },
-        child: const Text('Save'),
-      ),
-    ],
-  );
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () {
+            if (!_form.currentState!.validate()) return;
+            Navigator.pop(
+              context,
+              RecurringExpense(
+                id: widget.initial?.id ?? const Uuid().v4(),
+                title: _title.text.trim(),
+                amountCents: _amountCents(),
+                category: _category,
+                dayOfMonth: int.parse(_day.text),
+                type: _type,
+                lastApplied: widget.initial?.lastApplied,
+              ),
+            );
+          },
+          child: const Text('Save'),
+        ),
+      ],
+    );
+  }
 }

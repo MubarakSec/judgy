@@ -197,9 +197,11 @@ void main() {
         ChangeNotifierProvider.value(value: p, child: const JudgyApp()),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Budget and currency settings'));
+      await tester.tap(find.byTooltip('Settings'));
       await tester.pumpAndSettle();
       expect(find.text('Settings'), findsOneWidget);
+      await tester.ensureVisible(find.text('Backup & restore'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Backup & restore'));
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.text('Export backup'));
