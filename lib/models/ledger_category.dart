@@ -1,5 +1,6 @@
 import 'expense.dart';
 import 'recurring_expense.dart';
+import 'favorite_template.dart';
 
 class LedgerCategory {
   const LedgerCategory({
@@ -81,6 +82,7 @@ class LedgerCategory {
     required Iterable<Expense> expenses,
     required Iterable<RecurringExpense> recurring,
     required Iterable<String> budgetCategories,
+    Iterable<FavoriteTemplate> favorites = const [],
   }) {
     final result = [...categories];
     final seen = <String>{
@@ -105,6 +107,9 @@ class LedgerCategory {
     }
     for (final item in recurring) {
       add(item.category, item.type);
+    }
+    for (final favorite in favorites) {
+      add(favorite.category, favorite.type);
     }
     for (final category in budgetCategories) {
       add(category, 'expense');

@@ -8,6 +8,7 @@ import '../models/cash_flow_history.dart';
 import '../models/expense_state.dart';
 import '../models/ledger_category.dart';
 import '../models/recurring_expense.dart';
+import '../models/favorite_template.dart';
 import '../repositories/expense_repository.dart';
 import '../services/quick_add_notifications.dart';
 import '../utils/expense_csv.dart';
@@ -90,6 +91,44 @@ class ExpenseProvider with ChangeNotifier {
       '${entry.type}|${entry.title.trim().toLowerCase()}|${entry.category}';
 
   bool isQuickEntryPinned(String id) => _state.pinnedQuickEntryIds.contains(id);
+
+  List<FavoriteTemplate> get favorites => List.unmodifiable(_state.favorites);
+
+  Future<bool> addFavorite(FavoriteTemplate favorite) => _mutate((state) {
+    favorite.validate();
+    if (state.favorites.length >= 12) {
+      throw const FormatException('Keep up to 12 favorites.');
+    }
+    if (state.favorites.any((item) => item.id == favorite.id)) {
+      throw const FormatException('Favorite already exists.');
+    }
+    return state.copyWith(favorites: [...state.favorites, favorite]);
+  });
+
+  Future<bool> updateFavorite(FavoriteTemplate favorite) => _mutate((state) {
+    favorite.validate();
+    if (!state.favorites.any((item) => item.id == favorite.id)) {
+      throw const FormatException('Favorite no longer exists.');
+    }
+    return state.copyWith(
+      favorites: [
+        for (final item in state.favorites)
+          item.id == favorite.id ? favorite : item,
+      ],
+    );
+  });
+
+  Future<bool> removeFavorite(String id) => _mutate((state) {
+    if (!state.favorites.any((item) => item.id == id)) {
+      throw const FormatException('Favorite no longer exists.');
+    }
+    return state.copyWith(
+      favorites: [
+        for (final item in state.favorites)
+          if (item.id != id) item,
+      ],
+    );
+  });
 
   Future<bool> toggleQuickEntryPin(String id) => _mutate((state) {
     if (!state.expenses.any((entry) => entry.id == id)) {
@@ -187,6 +226,45 @@ class ExpenseProvider with ChangeNotifier {
         .fold(0, (sum, e) => sum + e.amountCents);
   }
 
+  Map<String, int> monthlyCategoryTotals(String type) {
+    if (type != 'expense' && type != 'income') {
+      throw ArgumentError.value(type, 'type');
+    }
+    final start = DateTime(now.year, now.month);
+    final current = now;
+    final totals = <String, int>{};
+    for (final entry in _state.expenses) {
+      if (entry.type != type ||
+          entry.date.isBefore(start) ||
+          entry.date.isAfter(current)) {
+        continue;
+      }
+      totals.update(
+        entry.category,
+        (sum) => sum + entry.amountCents,
+        ifAbsent: () => entry.amountCents,
+      );
+    }
+    return Map.unmodifiable(totals);
+  }
+
+  int monthlyCategoryCount(String type, {String? category}) {
+    if (type != 'expense' && type != 'income') {
+      throw ArgumentError.value(type, 'type');
+    }
+    final start = DateTime(now.year, now.month);
+    final current = now;
+    return _state.expenses
+        .where(
+          (entry) =>
+              entry.type == type &&
+              (category == null || entry.category == category) &&
+              !entry.date.isBefore(start) &&
+              !entry.date.isAfter(current),
+        )
+        .length;
+  }
+
   int get monthlyRemainingCents => monthlyBudgetCents - monthlySpentCents;
   List<MonthlyCashFlow> get sixMonthCashFlow =>
       CashFlowHistory.calculate(expenses: _state.expenses, now: now);
@@ -195,19 +273,7 @@ class ExpenseProvider with ChangeNotifier {
       : (monthlySpentCents / monthlyBudgetCents).clamp(0.0, 1.0);
   bool get isOverBudget =>
       monthlyBudgetCents > 0 && monthlySpentCents > monthlyBudgetCents;
-  Map<String, int> get categoryTotals {
-    final start = DateTime(now.year, now.month);
-    final totals = <String, int>{};
-    for (final e in _state.expenses) {
-      if (e.isIncome || e.date.isBefore(start) || e.date.isAfter(now)) continue;
-      totals.update(
-        e.category,
-        (value) => value + e.amountCents,
-        ifAbsent: () => e.amountCents,
-      );
-    }
-    return totals;
-  }
+  Map<String, int> get categoryTotals => monthlyCategoryTotals('expense');
 
   int get previousMonthSpentCents {
     final start = DateTime(now.year, now.month - 1);
@@ -400,11 +466,21 @@ class ExpenseProvider with ChangeNotifier {
       final cents = budgets.remove(oldLabel);
       if (cents != null) budgets[replacement.label] = cents;
     }
+    final favorites = renamed
+        ? [
+            for (final item in s.favorites)
+              if (item.type == replacement.type && item.category == oldLabel)
+                item.copyWith(category: replacement.label)
+              else
+                item,
+          ]
+        : s.favorites;
     return s.copyWith(
       categories: categories,
       expenses: expenses,
       recurring: recurring,
       categoryBudgetCents: budgets,
+      favorites: favorites,
     );
   });
 
@@ -414,6 +490,7 @@ class ExpenseProvider with ChangeNotifier {
     }
     if (s.expenses.any((e) => e.type == type && e.category == label) ||
         s.recurring.any((e) => e.type == type && e.category == label) ||
+        s.favorites.any((e) => e.type == type && e.category == label) ||
         (type == 'expense' && s.categoryBudgetCents.containsKey(label))) {
       throw const FormatException(
         'This category is in use. Rename it to update existing entries.',
@@ -613,6 +690,7 @@ class ExpenseProvider with ChangeNotifier {
           expenses: expenses,
           recurring: s.recurring,
           budgetCategories: s.categoryBudgetCents.keys,
+          favorites: s.favorites,
         ),
         pinnedQuickEntryIds: const [],
       );
@@ -688,6 +766,7 @@ class ExpenseProvider with ChangeNotifier {
             expenses: next.expenses,
             recurring: next.recurring,
             budgetCategories: next.categoryBudgetCents.keys,
+            favorites: next.favorites,
           ),
         );
         LedgerCategory.validateList(next.categories);
