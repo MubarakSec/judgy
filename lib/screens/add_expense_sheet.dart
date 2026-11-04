@@ -4,11 +4,13 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../models/expense.dart';
+import '../models/favorite_template.dart';
 import '../providers/expense_provider.dart';
 import '../theme/app_theme.dart';
 import '../utils/currency_formatter.dart';
 import '../widgets/app_sheet.dart';
 import '../widgets/quick_entry_strip.dart';
+import 'favorites_sheet.dart';
 
 class AddExpenseSheet extends StatefulWidget {
   const AddExpenseSheet({
@@ -51,6 +53,7 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
   String? _initialAmountText;
   String? _initialCurrency;
   String? _selectedQuickEntryId;
+  String? _selectedFavoriteId;
 
   @override
   void initState() {
@@ -101,6 +104,7 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
         : entry.amount * provider.exchangeRate;
     setState(() {
       _selectedQuickEntryId = entry.id;
+      _selectedFavoriteId = null;
       _type = entry.type;
       _selectedCategory = entry.category;
       _entryCurrency = currency;
@@ -111,6 +115,71 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
       _noteController.clear();
       _submitError = null;
     });
+  }
+
+  void _useFavorite(FavoriteTemplate item) {
+    if (_isSubmitting) return;
+    final provider = context.read<ExpenseProvider>();
+    setState(() {
+      _selectedFavoriteId = item.id;
+      _selectedQuickEntryId = null;
+      _type = item.type;
+      _selectedCategory = item.category;
+      _entryCurrency = item.currency;
+      _selectedDate = provider.now;
+      _showDetails = false;
+      _titleController.text = item.title;
+      _amountController.text = CurrencyFormatter.amountInputFromMinorUnits(
+        item.amountMinorUnits,
+      );
+      _noteController.clear();
+      _submitError = null;
+    });
+  }
+
+  Future<void> _newFavorite() async {
+    final provider = context.read<ExpenseProvider>();
+    final amount = CurrencyFormatter.parseAmount(_amountController.text);
+    final change = await showDialog<FavoriteChange>(
+      context: context,
+      builder: (_) => FavoriteEditorDialog(
+        draftTitle: _titleController.text,
+        draftAmount: amount != null && amount > 0 ? amount : null,
+        draftCurrency: _entryCurrency,
+        draftCategory: _selectedCategory,
+        draftType: _type,
+      ),
+    );
+    if (change == null || !mounted) return;
+    final saved = await provider.addFavorite(change.favorite!);
+    if (!mounted) return;
+    if (saved) {
+      _useFavorite(change.favorite!);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            provider.errorMessage ?? 'Favorite could not be saved.',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _manageFavorites() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const FavoritesSheet(),
+    );
+    if (!mounted) return;
+    final provider = context.read<ExpenseProvider>();
+    if (_selectedFavoriteId != null &&
+        !provider.favorites.any((item) => item.id == _selectedFavoriteId)) {
+      setState(() => _selectedFavoriteId = null);
+    }
   }
 
   @override
@@ -252,10 +321,14 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (widget.expense == null && provider.quickEntries.isNotEmpty) ...[
+            if (widget.expense == null) ...[
               QuickEntryStrip(
                 selectedId: _selectedQuickEntryId,
+                selectedFavoriteId: _selectedFavoriteId,
                 onSelected: _useQuickEntry,
+                onFavoriteSelected: _useFavorite,
+                onAddFavorite: _newFavorite,
+                onManageFavorites: _manageFavorites,
               ),
               const SizedBox(height: AppSpacing.lg),
             ],
