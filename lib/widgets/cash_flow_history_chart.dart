@@ -51,9 +51,9 @@ class _CashFlowHistoryChartState extends State<CashFlowHistoryChart> {
     if (months.isEmpty || months.every((month) => month.isEmpty)) {
       return Text(
         'No transactions in the last six months.',
-        style: Theme.of(
-          context,
-        ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          color: AppPalette.of(context).textSecondary,
+        ),
       );
     }
     final selected = (_selectedIndex ?? months.length - 1).clamp(
@@ -72,10 +72,10 @@ class _CashFlowHistoryChartState extends State<CashFlowHistoryChart> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Row(
-          children: const [
-            _Legend(color: AppColors.accent, label: 'Spent'),
-            SizedBox(width: AppSpacing.md),
-            _Legend(color: AppColors.success, label: 'Received'),
+          children: [
+            _Legend(color: AppPalette.of(context).accent, label: 'Spent'),
+            const SizedBox(width: AppSpacing.md),
+            _Legend(color: AppPalette.of(context).success, label: 'Received'),
           ],
         ),
         const SizedBox(height: AppSpacing.sm),
@@ -103,7 +103,7 @@ class _CashFlowHistoryChartState extends State<CashFlowHistoryChart> {
         Container(
           padding: const EdgeInsets.all(AppSpacing.md),
           decoration: BoxDecoration(
-            color: AppColors.surfaceElevated,
+            color: AppPalette.of(context).surfaceElevated,
             borderRadius: BorderRadius.circular(AppRadii.medium),
           ),
           child: Column(
@@ -126,14 +126,16 @@ class _CashFlowHistoryChartState extends State<CashFlowHistoryChart> {
                     child: _MonthValue(
                       label: 'Received',
                       value: _money(current.receivedCents),
-                      color: AppColors.success,
+                      color: AppPalette.of(context).success,
                     ),
                   ),
                   Expanded(
                     child: _MonthValue(
                       label: 'Net',
                       value: '${net < 0 ? '-' : '+'}${_money(net.abs())}',
-                      color: net < 0 ? AppColors.danger : AppColors.textPrimary,
+                      color: net < 0
+                          ? AppPalette.of(context).danger
+                          : AppPalette.of(context).textPrimary,
                     ),
                   ),
                 ],
@@ -189,10 +191,14 @@ class _MonthBars extends StatelessWidget {
         child: Container(
           margin: const EdgeInsets.symmetric(horizontal: 2),
           decoration: BoxDecoration(
-            color: selected ? AppColors.surfaceElevated : Colors.transparent,
+            color: selected
+                ? AppPalette.of(context).surfaceElevated
+                : Colors.transparent,
             borderRadius: BorderRadius.circular(AppRadii.small),
             border: Border.all(
-              color: selected ? AppColors.border : Colors.transparent,
+              color: selected
+                  ? AppPalette.of(context).border
+                  : Colors.transparent,
             ),
           ),
           child: Column(
@@ -204,9 +210,9 @@ class _MonthBars extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      _bar(month.spentCents, AppColors.accent),
+                      _bar(month.spentCents, AppPalette.of(context).accent),
                       const SizedBox(width: 3),
-                      _bar(month.receivedCents, AppColors.success),
+                      _bar(month.receivedCents, AppPalette.of(context).success),
                     ],
                   ),
                 ),
@@ -218,8 +224,8 @@ class _MonthBars extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: selected
-                      ? AppColors.textPrimary
-                      : AppColors.textSecondary,
+                      ? AppPalette.of(context).textPrimary
+                      : AppPalette.of(context).textSecondary,
                 ),
               ),
               const SizedBox(height: AppSpacing.xs),

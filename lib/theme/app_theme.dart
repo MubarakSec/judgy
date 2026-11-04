@@ -1,20 +1,91 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
-abstract final class AppColors {
-  static const background = Color(0xFF101211);
-  static const surface = Color(0xFF1A1D1B);
-  static const surfaceElevated = Color(0xFF242824);
-  static const input = Color(0xFF141715);
-  static const accent = Color(0xFFE6B86A);
-  static const accentSoft = Color(0xFF332819);
-  static const onAccent = Color(0xFF241707);
-  static const textPrimary = Color(0xFFF4F3EE);
-  static const textSecondary = Color(0xFFACB1AA);
-  static const border = Color(0xFF3B403B);
-  static const success = Color(0xFF64D8A7);
-  static const warning = Color(0xFFFFC96B);
-  static const danger = Color(0xFFFF6B73);
-  static const onDanger = Color(0xFF210004);
+@immutable
+class AppPalette extends ThemeExtension<AppPalette> {
+  const AppPalette({
+    required this.background,
+    required this.surface,
+    required this.surfaceElevated,
+    required this.input,
+    required this.accent,
+    required this.accentSoft,
+    required this.onAccent,
+    required this.textPrimary,
+    required this.textSecondary,
+    required this.border,
+    required this.success,
+    required this.warning,
+    required this.danger,
+    required this.onDanger,
+  });
+
+  final Color background, surface, surfaceElevated, input;
+  final Color accent, accentSoft, onAccent;
+  final Color textPrimary, textSecondary, border;
+  final Color success, warning, danger, onDanger;
+
+  static const dark = AppPalette(
+    background: Color(0xFF101211),
+    surface: Color(0xFF1A1D1B),
+    surfaceElevated: Color(0xFF242824),
+    input: Color(0xFF141715),
+    accent: Color(0xFFE6B86A),
+    accentSoft: Color(0xFF332819),
+    onAccent: Color(0xFF241707),
+    textPrimary: Color(0xFFF4F3EE),
+    textSecondary: Color(0xFFACB1AA),
+    border: Color(0xFF3B403B),
+    success: Color(0xFF64D8A7),
+    warning: Color(0xFFFFC96B),
+    danger: Color(0xFFFF6B73),
+    onDanger: Color(0xFF210004),
+  );
+
+  static const light = AppPalette(
+    background: Color(0xFFF5F7F3),
+    surface: Color(0xFFFFFFFF),
+    surfaceElevated: Color(0xFFEDF1EA),
+    input: Color(0xFFF4F6F2),
+    accent: Color(0xFF72501F),
+    accentSoft: Color(0xFFF1E4CD),
+    onAccent: Color(0xFFFFFFFF),
+    textPrimary: Color(0xFF20251F),
+    textSecondary: Color(0xFF59645B),
+    border: Color(0xFFD7DED5),
+    success: Color(0xFF176348),
+    warning: Color(0xFF8B5B08),
+    danger: Color(0xFFB33C46),
+    onDanger: Color(0xFFFFFFFF),
+  );
+
+  static AppPalette of(BuildContext context) =>
+      Theme.of(context).extension<AppPalette>() ?? dark;
+
+  @override
+  AppPalette copyWith() => this;
+
+  @override
+  AppPalette lerp(ThemeExtension<AppPalette>? other, double t) {
+    if (other is! AppPalette) return this;
+    Color blend(Color a, Color b) => Color.lerp(a, b, t)!;
+    return AppPalette(
+      background: blend(background, other.background),
+      surface: blend(surface, other.surface),
+      surfaceElevated: blend(surfaceElevated, other.surfaceElevated),
+      input: blend(input, other.input),
+      accent: blend(accent, other.accent),
+      accentSoft: blend(accentSoft, other.accentSoft),
+      onAccent: blend(onAccent, other.onAccent),
+      textPrimary: blend(textPrimary, other.textPrimary),
+      textSecondary: blend(textSecondary, other.textSecondary),
+      border: blend(border, other.border),
+      success: blend(success, other.success),
+      warning: blend(warning, other.warning),
+      danger: blend(danger, other.danger),
+      onDanger: blend(onDanger, other.onDanger),
+    );
+  }
 }
 
 abstract final class AppSpacing {
@@ -41,77 +112,79 @@ abstract final class AppMotion {
 }
 
 abstract final class AppTheme {
-  static ThemeData get dark {
-    final colorScheme =
+  static ThemeData get dark => _build(AppPalette.dark, Brightness.dark);
+  static ThemeData get light => _build(AppPalette.light, Brightness.light);
+
+  static ThemeData _build(AppPalette colors, Brightness brightness) {
+    final scheme =
         ColorScheme.fromSeed(
-          seedColor: AppColors.accent,
-          brightness: Brightness.dark,
+          seedColor: colors.accent,
+          brightness: brightness,
         ).copyWith(
-          primary: AppColors.accent,
-          onPrimary: AppColors.onAccent,
-          secondary: AppColors.accent,
-          onSecondary: AppColors.onAccent,
-          surface: AppColors.surface,
-          onSurface: AppColors.textPrimary,
-          error: AppColors.danger,
-          onError: AppColors.onDanger,
-          outline: AppColors.border,
-          outlineVariant: AppColors.border,
+          primary: colors.accent,
+          onPrimary: colors.onAccent,
+          secondary: colors.accent,
+          onSecondary: colors.onAccent,
+          surface: colors.surface,
+          onSurface: colors.textPrimary,
+          error: colors.danger,
+          onError: colors.onDanger,
+          outline: colors.border,
+          outlineVariant: colors.border,
         );
-
     final base = ThemeData(
-      brightness: Brightness.dark,
+      brightness: brightness,
       useMaterial3: true,
-      colorScheme: colorScheme,
-      scaffoldBackgroundColor: AppColors.background,
+      colorScheme: scheme,
+      scaffoldBackgroundColor: colors.background,
       visualDensity: VisualDensity.standard,
+      extensions: [colors],
     );
-
-    final textTheme = base.textTheme.copyWith(
+    final text = base.textTheme.copyWith(
       headlineLarge: base.textTheme.headlineLarge?.copyWith(
-        color: AppColors.textPrimary,
+        color: colors.textPrimary,
         fontSize: 32,
         height: 1.1,
         fontWeight: FontWeight.w800,
         letterSpacing: -0.7,
       ),
       headlineMedium: base.textTheme.headlineMedium?.copyWith(
-        color: AppColors.textPrimary,
+        color: colors.textPrimary,
         fontSize: 28,
         height: 1.15,
         fontWeight: FontWeight.w800,
         letterSpacing: -0.4,
       ),
       headlineSmall: base.textTheme.headlineSmall?.copyWith(
-        color: AppColors.textPrimary,
+        color: colors.textPrimary,
         fontSize: 22,
         height: 1.2,
         fontWeight: FontWeight.w700,
       ),
       titleLarge: base.textTheme.titleLarge?.copyWith(
-        color: AppColors.textPrimary,
+        color: colors.textPrimary,
         fontSize: 20,
         height: 1.25,
         fontWeight: FontWeight.w700,
       ),
       titleMedium: base.textTheme.titleMedium?.copyWith(
-        color: AppColors.textPrimary,
+        color: colors.textPrimary,
         fontSize: 16,
         height: 1.3,
         fontWeight: FontWeight.w700,
       ),
       bodyLarge: base.textTheme.bodyLarge?.copyWith(
-        color: AppColors.textPrimary,
+        color: colors.textPrimary,
         fontSize: 16,
         height: 1.45,
       ),
       bodyMedium: base.textTheme.bodyMedium?.copyWith(
-        color: AppColors.textPrimary,
+        color: colors.textPrimary,
         fontSize: 14,
         height: 1.45,
       ),
       bodySmall: base.textTheme.bodySmall?.copyWith(
-        color: AppColors.textSecondary,
+        color: colors.textSecondary,
         fontSize: 12,
         height: 1.4,
       ),
@@ -120,20 +193,21 @@ abstract final class AppTheme {
         fontWeight: FontWeight.w700,
       ),
     );
-
-    final inputBorder = OutlineInputBorder(
+    final border = OutlineInputBorder(
       borderRadius: BorderRadius.circular(AppRadii.medium),
-      borderSide: const BorderSide(color: AppColors.border),
+      borderSide: BorderSide(color: colors.border),
     );
-
     return base.copyWith(
-      textTheme: textTheme,
-      appBarTheme: const AppBarTheme(
+      textTheme: text,
+      appBarTheme: AppBarTheme(
         backgroundColor: Colors.transparent,
-        foregroundColor: AppColors.textPrimary,
+        foregroundColor: colors.textPrimary,
         elevation: 0,
         scrolledUnderElevation: 0,
         surfaceTintColor: Colors.transparent,
+        systemOverlayStyle: brightness == Brightness.light
+            ? SystemUiOverlayStyle.dark
+            : SystemUiOverlayStyle.light,
       ),
       bottomSheetTheme: const BottomSheetThemeData(
         backgroundColor: Colors.transparent,
@@ -142,80 +216,80 @@ abstract final class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: AppColors.input,
-        labelStyle: const TextStyle(color: AppColors.textSecondary),
-        hintStyle: const TextStyle(color: AppColors.textSecondary),
-        errorStyle: const TextStyle(color: AppColors.danger),
+        fillColor: colors.input,
+        labelStyle: TextStyle(color: colors.textSecondary),
+        hintStyle: TextStyle(color: colors.textSecondary),
+        errorStyle: TextStyle(color: colors.danger),
         errorMaxLines: 2,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.md,
           vertical: AppSpacing.md,
         ),
-        border: inputBorder,
-        enabledBorder: inputBorder,
-        focusedBorder: inputBorder.copyWith(
-          borderSide: const BorderSide(color: AppColors.accent, width: 1.5),
+        border: border,
+        enabledBorder: border,
+        focusedBorder: border.copyWith(
+          borderSide: BorderSide(color: colors.accent, width: 1.5),
         ),
-        errorBorder: inputBorder.copyWith(
-          borderSide: const BorderSide(color: AppColors.danger),
+        errorBorder: border.copyWith(
+          borderSide: BorderSide(color: colors.danger),
         ),
-        focusedErrorBorder: inputBorder.copyWith(
-          borderSide: const BorderSide(color: AppColors.danger, width: 1.5),
+        focusedErrorBorder: border.copyWith(
+          borderSide: BorderSide(color: colors.danger, width: 1.5),
         ),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           minimumSize: const Size.fromHeight(56),
-          foregroundColor: colorScheme.onPrimary,
-          backgroundColor: AppColors.accent,
-          disabledForegroundColor: AppColors.textSecondary,
-          disabledBackgroundColor: AppColors.surfaceElevated,
+          foregroundColor: colors.onAccent,
+          backgroundColor: colors.accent,
+          disabledForegroundColor: colors.textSecondary,
+          disabledBackgroundColor: colors.surfaceElevated,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppRadii.medium),
           ),
-          textStyle: textTheme.labelLarge,
+          textStyle: text.labelLarge,
         ),
       ),
-      floatingActionButtonTheme: const FloatingActionButtonThemeData(
-        backgroundColor: AppColors.textPrimary,
-        foregroundColor: AppColors.background,
+      floatingActionButtonTheme: FloatingActionButtonThemeData(
+        backgroundColor: colors.textPrimary,
+        foregroundColor: colors.background,
         elevation: 2,
         focusElevation: 2,
         hoverElevation: 3,
       ),
       chipTheme: base.chipTheme.copyWith(
-        backgroundColor: AppColors.surface,
-        selectedColor: AppColors.accentSoft,
-        side: const BorderSide(color: AppColors.border),
+        backgroundColor: colors.surface,
+        selectedColor: colors.accentSoft,
+        side: BorderSide(color: colors.border),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadii.medium),
         ),
-        labelStyle: textTheme.labelLarge,
+        labelStyle: text.labelLarge,
       ),
       snackBarTheme: SnackBarThemeData(
-        backgroundColor: AppColors.surfaceElevated,
-        contentTextStyle: textTheme.bodyMedium,
-        actionTextColor: AppColors.accent,
+        backgroundColor: colors.surfaceElevated,
+        contentTextStyle: text.bodyMedium,
+        actionTextColor: colors.accent,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadii.medium),
         ),
       ),
-      progressIndicatorTheme: const ProgressIndicatorThemeData(
-        color: AppColors.accent,
-        linearTrackColor: AppColors.input,
+      progressIndicatorTheme: ProgressIndicatorThemeData(
+        color: colors.accent,
+        linearTrackColor: colors.input,
       ),
-      dividerTheme: const DividerThemeData(
-        color: AppColors.border,
+      dividerTheme: DividerThemeData(
+        color: colors.border,
         thickness: 1,
         space: 1,
       ),
       tooltipTheme: TooltipThemeData(
         decoration: BoxDecoration(
-          color: AppColors.surfaceElevated,
+          color: colors.surfaceElevated,
           borderRadius: BorderRadius.circular(AppRadii.small),
         ),
-        textStyle: textTheme.bodySmall?.copyWith(color: AppColors.textPrimary),
+        textStyle: text.bodySmall?.copyWith(color: colors.textPrimary),
       ),
     );
   }

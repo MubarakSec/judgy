@@ -44,10 +44,17 @@ class JudgyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final mode = context.watch<ExpenseProvider>().themeMode;
     return MaterialApp(
       title: 'Judgy',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.dark,
+      theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
+      themeMode: switch (mode) {
+        'light' => ThemeMode.light,
+        'system' => ThemeMode.system,
+        _ => ThemeMode.dark,
+      },
       builder: (context, child) => AppLockGate(child: child!),
       home: HomeScreen(openAddOnStart: openAddOnStart),
     );
@@ -58,11 +65,24 @@ class QuickAddApp extends StatelessWidget {
   const QuickAddApp({super.key});
 
   @override
-  Widget build(BuildContext context) => MaterialApp(
-    title: 'Quick add',
-    debugShowCheckedModeBanner: false,
-    theme: AppTheme.dark.copyWith(scaffoldBackgroundColor: Colors.transparent),
-    builder: (context, child) => AppLockGate(child: child!),
-    home: const QuickAddOverlay(),
-  );
+  Widget build(BuildContext context) {
+    final mode = context.watch<ExpenseProvider>().themeMode;
+    return MaterialApp(
+      title: 'Quick add',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.light.copyWith(
+        scaffoldBackgroundColor: Colors.transparent,
+      ),
+      darkTheme: AppTheme.dark.copyWith(
+        scaffoldBackgroundColor: Colors.transparent,
+      ),
+      themeMode: switch (mode) {
+        'light' => ThemeMode.light,
+        'system' => ThemeMode.system,
+        _ => ThemeMode.dark,
+      },
+      builder: (context, child) => AppLockGate(child: child!),
+      home: const QuickAddOverlay(),
+    );
+  }
 }

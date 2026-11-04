@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -16,77 +18,88 @@ class TimeFilterTabs extends StatelessWidget {
     return Semantics(
       label: 'Spending period',
       container: true,
-      child: SizedBox(
-        width: double.infinity,
-        child: SegmentedButton<String>(
-          segments: _filters
-              .map(
-                (filter) =>
-                    ButtonSegment<String>(value: filter, label: Text(filter)),
-              )
-              .toList(),
-          selected: {provider.timeFilter},
-          showSelectedIcon: false,
-          expandedInsets: EdgeInsets.zero,
-          onSelectionChanged: (selection) async {
-            final filter = selection.first;
-            if (filter != 'Custom') {
-              provider.setTimeFilter(filter);
-              return;
-            }
-            final now = DateTime.now();
-            final picked = await showDateRangePicker(
-              context: context,
-              firstDate: DateTime(2000),
-              lastDate: now.add(const Duration(days: 365)),
-              initialDateRange: provider.customRangeStart != null &&
-                      provider.customRangeEnd != null
-                  ? DateTimeRange(
-                      start: provider.customRangeStart!,
-                      end: provider.customRangeEnd!,
-                    )
-                  : DateTimeRange(
-                      start: now.subtract(const Duration(days: 7)),
-                      end: now,
-                    ),
-            );
-            if (picked != null) {
-              provider.setCustomRange(picked.start, picked.end);
-            } else if (provider.timeFilter != 'Custom') {
-              // Keep previous filter if picker cancelled.
-            } else {
-              provider.setTimeFilter('Month');
-            }
-          },
-          style: ButtonStyle(
-            minimumSize: const WidgetStatePropertyAll(Size(0, 48)),
-            padding: const WidgetStatePropertyAll(
-              EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+      child: LayoutBuilder(
+        builder: (context, constraints) => SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: SizedBox(
+            width: math.max(
+              constraints.maxWidth,
+              MediaQuery.textScalerOf(context).scale(290),
             ),
-            backgroundColor: WidgetStateProperty.resolveWith((states) {
-              return states.contains(WidgetState.selected)
-                  ? AppColors.accentSoft
-                  : AppColors.surface;
-            }),
-            foregroundColor: WidgetStateProperty.resolveWith((states) {
-              return states.contains(WidgetState.selected)
-                  ? AppColors.accent
-                  : AppColors.textSecondary;
-            }),
-            side: WidgetStateProperty.resolveWith((states) {
-              return BorderSide(
-                color: states.contains(WidgetState.selected)
-                    ? AppColors.accent
-                    : AppColors.border,
-              );
-            }),
-            textStyle: WidgetStateProperty.resolveWith((states) {
-              return TextStyle(
-                fontWeight: states.contains(WidgetState.selected)
-                    ? FontWeight.w700
-                    : FontWeight.w500,
-              );
-            }),
+            child: SegmentedButton<String>(
+              segments: _filters
+                  .map(
+                    (filter) => ButtonSegment<String>(
+                      value: filter,
+                      label: Text(filter),
+                    ),
+                  )
+                  .toList(),
+              selected: {provider.timeFilter},
+              showSelectedIcon: false,
+              expandedInsets: EdgeInsets.zero,
+              onSelectionChanged: (selection) async {
+                final filter = selection.first;
+                if (filter != 'Custom') {
+                  provider.setTimeFilter(filter);
+                  return;
+                }
+                final now = DateTime.now();
+                final picked = await showDateRangePicker(
+                  context: context,
+                  firstDate: DateTime(2000),
+                  lastDate: now.add(const Duration(days: 365)),
+                  initialDateRange:
+                      provider.customRangeStart != null &&
+                          provider.customRangeEnd != null
+                      ? DateTimeRange(
+                          start: provider.customRangeStart!,
+                          end: provider.customRangeEnd!,
+                        )
+                      : DateTimeRange(
+                          start: now.subtract(const Duration(days: 7)),
+                          end: now,
+                        ),
+                );
+                if (picked != null) {
+                  provider.setCustomRange(picked.start, picked.end);
+                } else if (provider.timeFilter != 'Custom') {
+                  // Keep previous filter if picker cancelled.
+                } else {
+                  provider.setTimeFilter('Month');
+                }
+              },
+              style: ButtonStyle(
+                minimumSize: const WidgetStatePropertyAll(Size(0, 48)),
+                padding: const WidgetStatePropertyAll(
+                  EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                ),
+                backgroundColor: WidgetStateProperty.resolveWith((states) {
+                  return states.contains(WidgetState.selected)
+                      ? AppPalette.of(context).accentSoft
+                      : AppPalette.of(context).surface;
+                }),
+                foregroundColor: WidgetStateProperty.resolveWith((states) {
+                  return states.contains(WidgetState.selected)
+                      ? AppPalette.of(context).accent
+                      : AppPalette.of(context).textSecondary;
+                }),
+                side: WidgetStateProperty.resolveWith((states) {
+                  return BorderSide(
+                    color: states.contains(WidgetState.selected)
+                        ? AppPalette.of(context).accent
+                        : AppPalette.of(context).border,
+                  );
+                }),
+                textStyle: WidgetStateProperty.resolveWith((states) {
+                  return TextStyle(
+                    fontWeight: states.contains(WidgetState.selected)
+                        ? FontWeight.w700
+                        : FontWeight.w500,
+                  );
+                }),
+              ),
+            ),
           ),
         ),
       ),

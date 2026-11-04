@@ -8,7 +8,6 @@ import '../theme/app_theme.dart';
 import '../widgets/expense_tile.dart';
 import '../widgets/time_filter_tabs.dart';
 import '../widgets/total_spent_card.dart';
-import '../widgets/quick_entry_strip.dart';
 import '../models/expense.dart';
 import '../models/transaction_browser.dart';
 import '../services/quick_add_notifications.dart';
@@ -17,6 +16,7 @@ import 'add_expense_sheet.dart';
 import 'settings_sheet.dart';
 import 'insights_sheet.dart';
 import 'recurring_sheet.dart';
+import 'budget_sheet.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, this.openAddOnStart = false});
@@ -170,6 +170,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
+  Future<void> _openBudget(BuildContext context) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      barrierLabel: 'Close budget',
+      builder: (_) => const BudgetSheet(),
+    );
+  }
+
   Future<void> _toggleCurrency(
     BuildContext context,
     ExpenseProvider provider,
@@ -210,8 +221,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             icon: Icon(
               Icons.sort_rounded,
               color: _sortMode == TransactionSort.newest
-                  ? AppColors.textSecondary
-                  : AppColors.accent,
+                  ? AppPalette.of(context).textSecondary
+                  : AppPalette.of(context).accent,
             ),
             onSelected: (value) => setState(() => _sortMode = value),
             itemBuilder: (_) => [
@@ -254,21 +265,26 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         titleSpacing: AppSpacing.lg,
         title: Text('Judgy', style: Theme.of(context).textTheme.headlineLarge),
         actions: [
-          Tooltip(
-            message: provider.isUSD
+          IconButton(
+            tooltip: provider.isUSD
                 ? 'Switch display to YER'
                 : 'Switch display to USD',
-            child: ActionChip(
-              avatar: const Icon(Icons.currency_exchange, size: 18),
-              label: Text(provider.isUSD ? 'USD' : 'YER'),
-              onPressed: provider.isSaving
-                  ? null
-                  : () => _toggleCurrency(context, provider),
+            icon: Text(
+              provider.isUSD ? 'USD' : 'YER',
+              style: Theme.of(context).textTheme.labelMedium,
             ),
+            onPressed: provider.isSaving
+                ? null
+                : () => _toggleCurrency(context, provider),
+          ),
+          IconButton(
+            icon: const Icon(Icons.donut_small_outlined),
+            tooltip: 'Budget',
+            onPressed: () => _openBudget(context),
           ),
           IconButton(
             icon: const Icon(Icons.tune),
-            tooltip: 'Budget and currency settings',
+            tooltip: 'Settings',
             onPressed: provider.isLoading || provider.isSaving
                 ? null
                 : () => _openSettings(context),
@@ -306,14 +322,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         ],
                         const SizedBox(height: AppSpacing.md),
                         const TotalSpentCard(),
-                        if (query.isEmpty &&
-                            provider.quickEntries.isNotEmpty) ...[
-                          const SizedBox(height: AppSpacing.md),
-                          QuickEntryStrip(
-                            onSelected: (entry) =>
-                                _openAddExpense(context, suggestion: entry),
-                          ),
-                        ],
                         const SizedBox(height: AppSpacing.md),
                         Row(
                           children: [
@@ -340,25 +348,28 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             ),
                           ],
                         ),
-                        SegmentedButton<TransactionKind>(
-                          showSelectedIcon: false,
-                          segments: const [
-                            ButtonSegment(
-                              value: TransactionKind.all,
-                              label: Text('All'),
-                            ),
-                            ButtonSegment(
-                              value: TransactionKind.spent,
-                              label: Text('Spent'),
-                            ),
-                            ButtonSegment(
-                              value: TransactionKind.received,
-                              label: Text('Received'),
-                            ),
-                          ],
-                          selected: {_kind},
-                          onSelectionChanged: (selection) =>
-                              setState(() => _kind = selection.first),
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: SegmentedButton<TransactionKind>(
+                            showSelectedIcon: false,
+                            segments: const [
+                              ButtonSegment(
+                                value: TransactionKind.all,
+                                label: Text('All'),
+                              ),
+                              ButtonSegment(
+                                value: TransactionKind.spent,
+                                label: Text('Spent'),
+                              ),
+                              ButtonSegment(
+                                value: TransactionKind.received,
+                                label: Text('Received'),
+                              ),
+                            ],
+                            selected: {_kind},
+                            onSelectionChanged: (selection) =>
+                                setState(() => _kind = selection.first),
+                          ),
                         ),
                         const SizedBox(height: AppSpacing.sm),
                         _buildSearch(),
@@ -464,7 +475,7 @@ class _LoadingHome extends StatelessWidget {
             Container(
               height: 48,
               decoration: BoxDecoration(
-                color: AppColors.surface,
+                color: AppPalette.of(context).surface,
                 borderRadius: BorderRadius.circular(AppRadii.medium),
               ),
             ),
@@ -472,7 +483,7 @@ class _LoadingHome extends StatelessWidget {
             Container(
               height: 220,
               decoration: BoxDecoration(
-                color: AppColors.surface,
+                color: AppPalette.of(context).surface,
                 borderRadius: BorderRadius.circular(AppRadii.large),
               ),
             ),
@@ -496,14 +507,16 @@ class _StatusNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = isError ? AppColors.danger : AppColors.warning;
+    final color = isError
+        ? AppPalette.of(context).danger
+        : AppPalette.of(context).warning;
     return Semantics(
       liveRegion: true,
       container: true,
       child: Container(
         padding: const EdgeInsets.only(left: AppSpacing.md),
         decoration: BoxDecoration(
-          color: AppColors.surfaceElevated,
+          color: AppPalette.of(context).surfaceElevated,
           borderRadius: BorderRadius.circular(AppRadii.medium),
           border: Border.all(color: color),
         ),
@@ -557,15 +570,15 @@ class _EmptyState extends StatelessWidget {
               Container(
                 width: 64,
                 height: 64,
-                decoration: const BoxDecoration(
-                  color: AppColors.surface,
+                decoration: BoxDecoration(
+                  color: AppPalette.of(context).surface,
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
                   hasAnyExpenses
                       ? Icons.event_available_outlined
                       : Icons.receipt_long_outlined,
-                  color: AppColors.accent,
+                  color: AppPalette.of(context).accent,
                   size: 30,
                 ),
               ),
@@ -582,7 +595,7 @@ class _EmptyState extends StatelessWidget {
                     : 'Add your first transaction to start seeing useful patterns.',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppColors.textSecondary,
+                  color: AppPalette.of(context).textSecondary,
                 ),
               ),
             ],

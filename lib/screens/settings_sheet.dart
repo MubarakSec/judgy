@@ -4,11 +4,11 @@ import 'package:local_auth/local_auth.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/expense_provider.dart';
-import '../utils/expense_categories.dart';
 import '../services/backup_files.dart';
 import '../services/local_snapshots.dart';
 import '../services/quick_add_notifications.dart';
 import '../theme/app_theme.dart';
+import 'category_manager_sheet.dart';
 import '../utils/currency_formatter.dart';
 import '../widgets/app_sheet.dart';
 import 'category_budget_editor.dart';
@@ -22,7 +22,6 @@ class SettingsSheet extends StatefulWidget {
 class _SettingsSheetState extends State<SettingsSheet> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _rateController;
-  late final TextEditingController _budgetController;
   final _files = const BackupFiles();
   final _snapshots = LocalSnapshots();
   bool _busy = false;
@@ -35,15 +34,11 @@ class _SettingsSheetState extends State<SettingsSheet> {
     _rateController = TextEditingController(
       text: provider.exchangeRate.toString(),
     );
-    _budgetController = TextEditingController(
-      text: provider.monthlyBudget.toStringAsFixed(2),
-    );
   }
 
   @override
   void dispose() {
     _rateController.dispose();
-    _budgetController.dispose();
     super.dispose();
   }
 
@@ -88,9 +83,8 @@ class _SettingsSheetState extends State<SettingsSheet> {
     if (!_formKey.currentState!.validate()) return;
     final p = context.read<ExpenseProvider>();
     _requireSaved(
-      await p.updateSettings(
+      await p.setExchangeRate(
         CurrencyFormatter.parseAmount(_rateController.text)!,
-        CurrencyFormatter.parseAmount(_budgetController.text)!,
       ),
       p,
     );
@@ -114,7 +108,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
   Future<void> _editCategoryBudget([String? existing]) async {
     final provider = context.read<ExpenseProvider>();
     final categories = <String>{
-      ...ExpenseCategory.labels,
+      ...provider.categoriesFor('expense').map((category) => category.label),
       ...provider.expenses.where((e) => !e.isIncome).map((e) => e.category),
       ...provider.categoryBudgetCents.keys,
     }.toList()..sort();
@@ -188,7 +182,6 @@ class _SettingsSheetState extends State<SettingsSheet> {
     _requireSaved(await (csv ? p.importCsv(source) : p.importState(source)), p);
     if (!mounted) return;
     _rateController.text = p.exchangeRate.toString();
-    _budgetController.text = p.monthlyBudget.toStringAsFixed(2);
     _message('Restored $count transactions.');
   }
 
@@ -302,6 +295,43 @@ class _SettingsSheetState extends State<SettingsSheet> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          Text('Appearance', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: AppSpacing.sm),
+          SegmentedButton<String>(
+            showSelectedIcon: false,
+            segments: const [
+              ButtonSegment(value: 'system', label: Text('System')),
+              ButtonSegment(value: 'light', label: Text('Light')),
+              ButtonSegment(value: 'dark', label: Text('Dark')),
+            ],
+            selected: {p.themeMode},
+            onSelectionChanged: disabled
+                ? null
+                : (selection) async {
+                    final saved = await p.setThemeMode(selection.first);
+                    if (!saved && context.mounted) {
+                      _message(p.errorMessage ?? 'Theme could not be saved.');
+                    }
+                  },
+          ),
+          const SizedBox(height: AppSpacing.md),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.category_outlined),
+            title: const Text('Categories'),
+            subtitle: const Text('Edit names and symbols, or add your own'),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: disabled
+                ? null
+                : () => showModalBottomSheet<void>(
+                    context: context,
+                    isScrollControlled: true,
+                    useSafeArea: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (_) => const CategoryManagerSheet(),
+                  ),
+          ),
+          const SizedBox(height: AppSpacing.md),
           Form(
             key: _formKey,
             autovalidateMode: AutovalidateMode.onUserInteraction,
@@ -324,24 +354,6 @@ class _SettingsSheetState extends State<SettingsSheet> {
                         : null;
                   },
                 ),
-                const SizedBox(height: AppSpacing.md),
-                TextFormField(
-                  controller: _budgetController,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  decoration: const InputDecoration(
-                    labelText: 'Monthly budget',
-                    helperText: 'Use zero to turn off the budget.',
-                    suffixText: 'USD',
-                  ),
-                  validator: (v) {
-                    final n = CurrencyFormatter.parseAmount(v ?? '');
-                    return n == null || n < 0 || n > 9007199254740991 / 100
-                        ? 'Enter a valid budget of zero or more.'
-                        : null;
-                  },
-                ),
               ],
             ),
           ),
@@ -352,7 +364,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
                 liveRegion: true,
                 child: Text(
                   _error!,
-                  style: const TextStyle(color: AppColors.danger),
+                  style: TextStyle(color: AppPalette.of(context).danger),
                 ),
               ),
             ),
@@ -393,8 +405,8 @@ class _SettingsSheetState extends State<SettingsSheet> {
                         color:
                             (p.categoryTotals[category] ?? 0) >
                                 p.categoryBudgetCents[category]!
-                            ? AppColors.danger
-                            : AppColors.accent,
+                            ? AppPalette.of(context).danger
+                            : AppPalette.of(context).accent,
                       ),
                     ],
                   ),
@@ -531,7 +543,9 @@ class _SettingsSheetState extends State<SettingsSheet> {
             onPressed: disabled ? null : _reset,
             icon: const Icon(Icons.delete_outline_rounded),
             label: const Text('Reset all data'),
-            style: TextButton.styleFrom(foregroundColor: AppColors.danger),
+            style: TextButton.styleFrom(
+              foregroundColor: AppPalette.of(context).danger,
+            ),
           ),
         ],
       ),
